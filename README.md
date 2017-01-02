@@ -21,6 +21,7 @@ The subcommands `set_input_log`, `set_driver_options`, and `simulate` are presen
 implemented. (The first two are not documented for `irsend` anyhow...).
 Help is welcome.
 
+Python3 only.
 It does not depend on anything but standard Python libraries.
 
 For a GUI version, look at IrScrutinizer.

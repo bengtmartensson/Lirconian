@@ -54,6 +54,7 @@ VERSION = "LircClient 0.1.0"
 READCHUNK = 4096
 LINEFEED = 10
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
+DEFAULT_PORT = 8765
 
 class LircServerException(Exception):
     pass
@@ -103,21 +104,15 @@ class AbstractLircClient:
         _timeout = timeout
 
     def readLine(self):
-        if self._inBuffer is None:
+        if self._inBuffer is None or len(self._inBuffer) == 0:
             self._inBuffer = self._socket.recv(READCHUNK)
 
         while LINEFEED not in self._inBuffer:
-            self._socket.settimeout(0.0)
-            try:
-                self._inBuffer += self._socket.recv(READCHUNK)
-            except:
-                self._socket.settimeout(self._timeout)
-                self._inBuffer = None
-                return None
+            self._inBuffer += self._socket.recv(READCHUNK)
 
-            self._socket.settimeout(self._timeout)
-
-        n = self._inBuffer.index(LINEFEED);
+        n = self._inBuffer.find(LINEFEED);
+        if n == -1:
+            return None
         line = self._inBuffer[0:n].decode("US-ASCII")
         self._inBuffer = self._inBuffer[n+1:len(self._inBuffer)]
         return line
@@ -179,7 +174,7 @@ class AbstractLircClient:
                     state = self.P_END
             elif state == self.P_END:
                 if string == "END":
-                    done = True
+                    state = self.P_DONE
                 else:
                     raise BadPacketException()
             else:
@@ -189,7 +184,7 @@ class AbstractLircClient:
             print("Lirc command " + ("succeded." if success else "failed."))
 
         if not success:
-            raise LircServerException(result[0])
+            raise LircServerException(''.join(result))
 
         return result
 
@@ -209,8 +204,14 @@ class AbstractLircClient:
     def getRemotes(self):
         return self.sendCommand("LIST")
 
-    def getCommands(self, remote):
-        return self.sendCommand("LIST " + remote)
+    def getCommands(self, remote, includeCodes = False):
+        raw = self.sendCommand("LIST " + remote)
+        if includeCodes:
+            return raw
+        result = []
+        for cmd in raw:
+            result.append(re.sub(r'^[0-9a-fA-F]* +', '', cmd))
+        return result
 
     def setTransmitters(self, transmitters):
         mask = 0
@@ -223,14 +224,14 @@ class AbstractLircClient:
         return self.sendCommand(s) is not None
 
     def getVersion(self):
-        result = self.sendCommand("VERSION", False)
+        result = self.sendCommand("VERSION")
         version = result[0]
         return version
 
 
 class UnixDomainSocketLircClient(AbstractLircClient):
 
-    def __init__(self, socketAddress, verbose):
+    def __init__(self, socketAddress = DEFAULT_LIRC_DEVICE, verbose = False):
         AbstractLircClient.__init__(self, verbose, None)
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._socket.connect(socketAddress)
@@ -238,7 +239,7 @@ class UnixDomainSocketLircClient(AbstractLircClient):
 
 class TcpLircClient(AbstractLircClient):
 
-    def __init__(self, address, port, verbose, timeout):
+    def __init__(self, address = "localhost", port = DEFAULT_PORT, verbose = False, timeout = None):
         AbstractLircClient.__init__(self, verbose, timeout)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.connect((address, port))
@@ -256,8 +257,8 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--address", help = 'IP name or address of lircd host. Takes preference over --device.', dest='address', default = None)
     socketPath = os.environ['LIRC_SOCKET_PATH'] if 'LIRC_SOCKET_PATH' in os.environ else DEFAULT_LIRC_DEVICE
     parser.add_argument('-d', '--device',  help = 'Path name of the lircd socket', dest = 'socketPathname', default = socketPath)
-    parser.add_argument('-p', '--port',    help = 'Port of lircd, default 8765', dest = 'port', default = 8765, type = int)
-    parser.add_argument('-t', '--timeout', help = 'Timeout in milliseconds, default 5000', dest = 'timeout', type = int, default = 5000)
+    parser.add_argument('-p', '--port',    help = 'Port of lircd, default ' + str(DEFAULT_PORT), dest = 'port', default = DEFAULT_PORT, type = int)
+    parser.add_argument('-t', '--timeout', help = 'Timeout in milliseconds', dest = 'timeout', type = int, default = None)
     parser.add_argument('-V', '--version', help = 'Display version information for this program', dest = 'versionRequested', action = 'store_true')
     parser.add_argument('-v', '--verbose', help = 'Have some commands executed verbosely', dest = 'verbose', action = 'store_true')
 
@@ -324,9 +325,9 @@ if __name__ == "__main__":
         elif args.subcommand == 'send_stop':
             lirc.stopIr(args.remote, args.command)
         elif args.subcommand == 'list':
-            result = lirc.getRemotes() if args.remote is None else lirc.getCommands(args.remote);
+            result = lirc.getRemotes() if args.remote is None else lirc.getCommands(args.remote, args.codes);
             for line in result:
-                print(line if args.codes else re.sub(r'^[0-9a-fA-F]* +', '', line))
+                print(line)
         elif args.subcommand == 'set_input_log':
             print("Subcommand not implemented yet, are YOU volunteering?")
             exitstatus = 2
