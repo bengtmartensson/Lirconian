@@ -20,24 +20,29 @@ receive information from a Lirc server.
 
 from LircClient import UnixDomainSocketLircClient
 
-lirc = UnixDomainSocketLircClient()
-# lirc.setVerbosity(True)
-version = lirc.getVersion()
-print("Version: {0}".format(version))
-remotes = lirc.getRemotes()
-i = 0
-for remote in remotes:
-    print(str(i) + ":\t" + remote)
-    i = i + 1
+def main():
+    lirc = UnixDomainSocketLircClient()
+    # lirc.setVerbosity(True)
+    version = lirc.getVersion()
+    print("Version: {0}".format(version))
+    remotes = lirc.getRemotes()
+    i = 0
+    for remote in remotes:
+        print(str(i) + ":\t" + remote)
+        i = i + 1
 
-remoteNo = int(input("Select a remote by entering its number: "))
-remote = remotes[remoteNo]
-commands = lirc.getCommands(remote)
-i = 0
-for command in commands:
-    print(str(i) + ":\t" + command)
-    i = i + 1
+    remote_no = int(input("Select a remote by entering its number: "))
+    remote = remotes[remote_no]
+    commands = lirc.getCommands(remote)
+    i = 0
+    for command in commands:
+        print(str(i) + ":\t" + command)
+        i = i + 1
 
-commandNo = int(input("Select a command by entering its number: "))
-command = commands[commandNo]
-lirc.sendIrCommand(remote, command, 1)
+    command_no = int(input("Select a command by entering its number: "))
+    command = commands[command_no]
+    lirc.sendIrCommand(remote, command, 1)
+
+if __name__ == "__main__":
+    main()
+
