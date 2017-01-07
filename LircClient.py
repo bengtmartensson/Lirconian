@@ -265,9 +265,8 @@ class TcpLircClient(AbstractLircClient):
 
 
 def new_lirc_client(command_line_args):
-    return UnixDomainSocketLircClient(
-        command_line_args.socket_pathname,
-        command_line_args.verbose) \
+    return UnixDomainSocketLircClient(command_line_args.socket_pathname,
+                                      command_line_args.verbose) \
         if command_line_args.address is None else \
         TcpLircClient(command_line_args.address,
                       command_line_args.port,
@@ -279,10 +278,10 @@ def main():
     parser = argparse.ArgumentParser(prog='LircClient')
     parser.add_argument(
         "-a", "--address",
-        help='IP name or address of lircd host.Overrides --device.',
+        help='IP name or address of lircd host. '
+        + 'Takes preference over --device.',
         dest='address', default=None)
-    socket_path = os.environ[
-        'LIRC_SOCKET_PATH'] \
+    socket_path = os.environ['LIRC_SOCKET_PATH'] \
         if 'LIRC_SOCKET_PATH' in os.environ else DEFAULT_LIRC_DEVICE
     parser.add_argument(
         '-d', '--device',
@@ -380,7 +379,8 @@ def main():
     # Command version
     subparsers.add_parser(
         'version',
-        help='get lircd version. (Use "version" for LircClient.py version)')
+        help='Inquire version of lircd. '
+        + ' (Use "--version" for the version of this program.)')
 
     args = parser.parse_args()
 
