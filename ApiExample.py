@@ -14,29 +14,31 @@
 
 
 """
-An somewhat silly example of using the API of LircClient to send and receive information from a Lirc server.
+An somewhat silly example of using the API of LircClient to send and
+receive information from a Lirc server.
 """
 
 from LircClient import UnixDomainSocketLircClient
 
 lirc = UnixDomainSocketLircClient()
-#lirc.setVerbosity(True)
-version = lirc.getVersion()
+# Uncomment if desired
+# lirc.setVerbosity(True)
+version = lirc.get_version()
 print("Version: {0}".format(version))
-remotes = lirc.getRemotes()
+remotes = lirc.get_remotes()
 i = 0
 for remote in remotes:
-    print(str(i) + ":\t" + remote);
-    i = i+1
+    print(str(i) + ":\t" + remote)
+    i = i + 1
 
-remoteNo = int(input("Select a remote by entering its number: "))
-remote = remotes[remoteNo]
-commands = lirc.getCommands(remote)
+remote_no = int(input("Select a remote by entering its number: "))
+remote = remotes[remote_no]
+commands = lirc.get_commands(remote)
 i = 0
 for command in commands:
     print(str(i) + ":\t" + command)
-    i = i+1
+    i = i + 1
 
-commandNo = int(input("Select a command by entering its number: "))
-command = commands[commandNo]
-lirc.sendIrCommand(remote, command, 1);
+command_no = int(input("Select a command by entering its number: "))
+command = commands[command_no]
+lirc.send_ir_command(remote, command, 1)
