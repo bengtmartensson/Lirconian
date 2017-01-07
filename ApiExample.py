@@ -20,29 +20,25 @@ receive information from a Lirc server.
 
 from LircClient import UnixDomainSocketLircClient
 
-def main():
-    lirc = UnixDomainSocketLircClient()
-    # lirc.setVerbosity(True)
-    version = lirc.getVersion()
-    print("Version: {0}".format(version))
-    remotes = lirc.getRemotes()
-    i = 0
-    for remote in remotes:
-        print(str(i) + ":\t" + remote)
-        i = i + 1
+lirc = UnixDomainSocketLircClient()
+# Uncomment if desired
+# lirc.setVerbosity(True)
+version = lirc.get_version()
+print("Version: {0}".format(version))
+remotes = lirc.get_remotes()
+i = 0
+for remote in remotes:
+    print(str(i) + ":\t" + remote)
+    i = i + 1
 
-    remote_no = int(input("Select a remote by entering its number: "))
-    remote = remotes[remote_no]
-    commands = lirc.getCommands(remote)
-    i = 0
-    for command in commands:
-        print(str(i) + ":\t" + command)
-        i = i + 1
+remote_no = int(input("Select a remote by entering its number: "))
+remote = remotes[remote_no]
+commands = lirc.get_commands(remote)
+i = 0
+for command in commands:
+    print(str(i) + ":\t" + command)
+    i = i + 1
 
-    command_no = int(input("Select a command by entering its number: "))
-    command = commands[command_no]
-    lirc.sendIrCommand(remote, command, 1)
-
-if __name__ == "__main__":
-    main()
-
+command_no = int(input("Select a command by entering its number: "))
+command = commands[command_no]
+lirc.send_ir_command(remote, command, 1)
