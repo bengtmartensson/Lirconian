@@ -1,4 +1,4 @@
-#! /usr/bin/python3
+#! /usr/bin/env python3
 
 # Copyright (C) 2017 Bengt Martensson.
 
@@ -26,8 +26,8 @@ There are some other subtile differences from irsend:
 * subcommand must be lower case,
 * send_once only takes one command (irsend takes several),
 * send_stop without arguments uses the remote and the command from the
-  last send_start command,
-* no need to give dummy empty arguments for list,
+  last send_start command (API only; not from the command line),
+* no need to give dummy empty arguments for commands like list,
 * The --count argument to send_once is argument to the subcommand.
 * the code in list remote is suppressed, unless -c is given,
 * port number must be given with the --port (-p) argument; hostip:portnumber
@@ -42,8 +42,12 @@ anyhow...).  Help is welcome.
 
 It does not depend on anything but standard Python libraries.
 
-For a GUI version, look at IrScrutinizer.
-For a Java version, look at JavaLircClient
+The name comes from the fact that the program requsts services from
+a Lirc server (lircd). It has nothing to do with the library
+lirc_client in Lirc.
+
+For a GUI alternative, look at IrScrutinizer.
+For a Java alternative, look at JavaLircClient
 https://github.com/bengtmartensson/JavaLircClient
 """
 
@@ -54,7 +58,7 @@ import re
 import os
 
 VERSION = "LircClient 0.1.0"
-READCHUNK = 4096
+READCHUNKLENGTH = 4096
 LINEFEED = 10
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
 DEFAULT_PORT = 8765
@@ -108,12 +112,12 @@ class AbstractLircClient:
     def set_timeout(self, timeout):
         self._timeout = timeout
 
-    def read_line(self):
+    def _read_line(self):
         if self._in_buffer is None or len(self._in_buffer) == 0:
-            self._in_buffer = self._socket.recv(READCHUNK)
+            self._in_buffer = self._socket.recv(READCHUNKLENGTH)
 
         while LINEFEED not in self._in_buffer:
-            self._in_buffer += self._socket.recv(READCHUNK)
+            self._in_buffer += self._socket.recv(READCHUNKLENGTH)
 
         n = self._in_buffer.find(LINEFEED)
         if n == -1:
@@ -122,15 +126,17 @@ class AbstractLircClient:
         self._in_buffer = self._in_buffer[n + 1:len(self._in_buffer)]
         return line
 
-    def send_string(self, cmd):
+    def _send_string(self, cmd):
         self._socket.send(bytearray(cmd, 'US-ASCII'))
 
-    def send_command(self, packet):
+    # This function should preferrably not be made public, although
+    # it may be tempting...
+    def _send_command(self, packet):
         if self._verbose:
-            print("Sending command `" + packet
+            print("Sending: `" + packet
                   + "' to Lirc@" + self._socket.__str__())
 
-        self.send_string(packet + '\n')
+        self._send_string(packet + '\n')
 
         result = []
         success = True
@@ -140,9 +146,9 @@ class AbstractLircClient:
         lines_expected = -1
 
         while state != self.P_DONE:
-            string = self.read_line()
+            string = self._read_line()
             if self._verbose:
-                print('Received "{0}"'.format(
+                print('Received: "{0}"'.format(
                     (string if string is not None else '')))
 
             if string is None:
@@ -165,14 +171,14 @@ class AbstractLircClient:
                     state = self.P_DATA
                     success = False
                 else:
-                    raise BadPacketException()
+                    raise BadPacketException(string)
             elif state == self.P_DATA:
                 if string == "END":
                     state = self.P_DONE
                 elif string == "DATA":
                     state = self.P_N
                 else:
-                    raise BadPacketException()
+                    raise BadPacketException(string)
             elif state == self.P_N:
                 lines_expected = int(string)
                 state = self.P_END if lines_expected == 0 else self.P_DATA_N
@@ -185,13 +191,13 @@ class AbstractLircClient:
                 if string == "END":
                     state = self.P_DONE
                 else:
-                    raise BadPacketException()
+                    raise BadPacketException(string)
             else:
                 raise ThisCannotHappenException(
                     "Unhandled case (programming error)")
 
         if self._verbose:
-            print("Lirc command " + ("succeded." if success else "failed."))
+            print("Command " + ("succeded." if success else "failed."))
 
         if not success:
             raise LircServerException(''.join(result))
@@ -201,14 +207,14 @@ class AbstractLircClient:
     def send_ir_command(self, remote, command, count):
         self._last_remote = remote
         self._last_command = command
-        return self.send_command(
-            "SEND_ONCE " + remote + " " + command + " " + str(count)) \
+        return self._send_command(
+            "SEND_ONCE " + remote + " " + command + " " + str(count - 1)) \
             is not None
 
     def send_ir_command_repeat(self, remote, command):
         self._last_remote = remote
         self._last_command = command
-        return self.send_command(
+        return self._send_command(
             "SEND_START " + remote + " " + command) is not None
 
     def stop_ir(self, remote=None, command=None):
@@ -219,10 +225,10 @@ class AbstractLircClient:
             is not None
 
     def get_remotes(self):
-        return self.send_command("LIST")
+        return self._send_command("LIST")
 
     def get_commands(self, remote, include_codes=False):
-        raw = self.send_command("LIST " + remote)
+        raw = self._send_command("LIST " + remote)
         if include_codes:
             return raw
         result = []
@@ -234,14 +240,14 @@ class AbstractLircClient:
         mask = 0
         for transmitter in transmitters:
             mask |= (1 << (int(transmitter) - 1))
-        return self.set_transmitters(mask) is not None
+        return self.set_transmitters_mask(mask) is not None
 
     def set_transmitters_mask(self, mask):
         s = "SET_TRANSMITTERS " + str(mask)
-        return self.send_command(s) is not None
+        return self._send_command(s) is not None
 
     def get_version(self):
-        result = self.send_command("VERSION")
+        result = self._send_command("VERSION")
         version = result[0]
         return version
 
@@ -264,7 +270,7 @@ class TcpLircClient(AbstractLircClient):
         self._socket.settimeout(timeout)
 
 
-def new_lirc_client(command_line_args):
+def _new_lirc_client(command_line_args):
     return UnixDomainSocketLircClient(command_line_args.socket_pathname,
                                       command_line_args.verbose) \
         if command_line_args.address is None else \
@@ -363,7 +369,6 @@ def main():
     parser_simulate = subparsers.add_parser(
         'simulate',
         help='Fake the reception of IR signals')
-    parser_simulate.add_argument('key', help='Name of command to be faked')
     parser_simulate.add_argument(
         'data',
         help='Key press data to be sent to the Lircd')
@@ -379,7 +384,7 @@ def main():
     # Command version
     subparsers.add_parser(
         'version',
-        help='Inquire version of lircd. '
+        help='Inquire version of the Lirc server. '
         + ' (Use "--version" for the version of this program.)')
 
     args = parser.parse_args()
@@ -390,12 +395,11 @@ def main():
 
     lirc = None
     try:
-        lirc = new_lirc_client(args)
-
+        lirc = _new_lirc_client(args)
         exitstatus = 0
 
         if args.subcommand == 'send_once':
-            lirc.send_ir_command(args.remote, args.command, args.count - 1)
+            lirc.send_ir_command(args.remote, args.command, args.count)
         elif args.subcommand == 'send_start':
             lirc.send_ir_command_repeat(args.remote, args.command)
         elif args.subcommand == 'send_stop':
@@ -419,14 +423,14 @@ def main():
         elif args.subcommand == 'version':
             print(lirc.get_version())
         else:
-            print('Unknown subcommand, use --help for syntax.')
+            print('Unknown or missing subcommand, use --help for syntax.')
             exitstatus = 1
 
     except LircServerException as ex:
         print("LircServerError: {0}".format(ex))
         exitstatus = 3
-    except BadPacketException:
-        print("Malformed package received")
+    except BadPacketException as ex:
+        print("Malformed or unexpected package received: {0}".format(ex))
         exitstatus = 4
     except ConnectionRefusedError:
         print("Connection refused")
