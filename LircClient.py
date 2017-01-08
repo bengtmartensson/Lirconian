@@ -78,6 +78,11 @@ class ThisCannotHappenException(Exception):
     pass
 
 
+class ClientInstantiationError(Exception):
+    """Thrown if the LircClient cannot be instantiated."""
+    pass
+
+
 class AbstractLircClient:
     """
     Abstract base class for the LircClient. To implement the class,
@@ -365,13 +370,16 @@ def _new_lirc_client(command_line_args):
     Factory method that returns a concrete subclass of the LircClient,
     depending on the argument.
     """
-    return UnixDomainSocketLircClient(command_line_args.socket_pathname,
-                                      command_line_args.verbose) \
-        if command_line_args.address is None else \
-        TcpLircClient(command_line_args.address,
-                      command_line_args.port,
-                      command_line_args.verbose,
-                      command_line_args.timeout)
+    try:
+        return UnixDomainSocketLircClient(command_line_args.socket_pathname,
+                                          command_line_args.verbose) \
+            if command_line_args.address is None else \
+            TcpLircClient(command_line_args.address,
+                          command_line_args.port,
+                          command_line_args.verbose,
+                          command_line_args.timeout)
+    except Exception as ex:
+        raise ClientInstantiationError(ex)
 
 
 def main():
@@ -492,6 +500,11 @@ def main():
     lirc = None
     try:
         lirc = _new_lirc_client(args)
+    except ClientInstantiationError as ex:
+        print("Cannot instantiate the client: {0}".format(ex))
+        sys.exit(2)
+
+    try:
         exitstatus = 0
 
         if args.subcommand == 'send_once':
@@ -525,15 +538,6 @@ def main():
     except BadPacketException as ex:
         print("Malformed or unexpected package received: {0}".format(ex))
         exitstatus = 4
-    except ConnectionRefusedError:
-        print("Connection refused")
-        exitstatus = 5
-    except FileNotFoundError as ex:
-        print("Could not find {0}".format(args.socket_pathname))
-        exitstatus = 5
-    except PermissionError as ex:
-        print("No permission to open {0}".format(args.socket_pathname))
-        exitstatus = 5
 
     if lirc is not None:
         lirc.close()
