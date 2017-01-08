@@ -61,21 +61,27 @@ DEFAULT_PORT = 8765
 
 
 class LircServerException(Exception):
+    """This exception is thrown when the Lirc server responds with an error."""
     pass
 
 
 class BadPacketException(Exception):
+    """This exception is thrown when a communication error occurs"""
     pass
 
 
 class ThisCannotHappenException(Exception):
+    """
+    This exception is thrown when an 'impossible' condition occurs,
+    most likely a programming error.
+    """
     pass
 
 
 class AbstractLircClient:
     """
-    Abstract base class for the LircClient. To implement, needs to
-    assign the abstract "socket" to something.
+    Abstract base class for the LircClient. To implement the class,
+    the abstract "socket" needs to be assigned to something sensible.
     """
     P_BEGIN = 0
     P_MESSAGE = 1
@@ -100,15 +106,22 @@ class AbstractLircClient:
         self._timeout = timeout
 
     def set_verbosity(self, verbosity):
+        """Set verbosity to the value of the argument."""
         self._verbose = verbosity
 
     def close(self):
+        """Close the connection."""
         self._socket.close()
 
     def set_timeout(self, timeout):
+        """Set the timeout used for communication with the Lirc server."""
         self._timeout = timeout
 
     def _read_line(self):
+        """
+        Return a line read from the socket.
+        The input from the socket is buffered.
+        """
         if self._in_buffer is None or len(self._in_buffer) == 0:
             self._in_buffer = self._socket.recv(READCHUNKLENGTH)
 
@@ -123,11 +136,17 @@ class AbstractLircClient:
         return line
 
     def _send_string(self, cmd):
+        """Sends a string to the Lirc server."""
         self._socket.send(bytearray(cmd, 'US-ASCII'))
 
     # This function should preferrably not be made public, although
     # it may be tempting...
     def _send_command(self, packet):
+        """
+        Sends its argument string to the Lirc server,
+        and receives one or many lines in response.
+        Returns a list of those lines.
+        """
         if self._verbose:
             print("Sending: `" + packet
                   + "' to Lirc@" + self._socket.__str__())
@@ -201,6 +220,11 @@ class AbstractLircClient:
         return result
 
     def send_ir_command(self, remote, command, count):
+        """
+        Requests the Lirc server to transmit the named commmand,
+        belonging to the named remote, the stated number of times.
+        (The number of repeats in the sense of lircd(8) will be one less.)
+        """
         self._last_remote = remote
         self._last_command = command
         return self._send_command(
@@ -208,22 +232,45 @@ class AbstractLircClient:
             is not None
 
     def send_ir_command_repeat(self, remote, command):
+        """
+        Requests the Lirc server to start transmitting the named command from
+        the named remote,
+        until either explicitly stopped by a corresponding stop_ir command,
+        or a server-specific limit is reached.
+        """
         self._last_remote = remote
         self._last_command = command
         return self._send_command(
             "SEND_START " + remote + " " + command) is not None
 
     def stop_ir(self, remote=None, command=None):
-        self.send_command(
+        """
+        Requests the Lirc server to stop transmitting the named command from
+        the named remote. If and only if the start_ir_command_repeat
+        has been previously used, the remote and command values can
+        be left out, in which case the old values are used.
+        """
+        return self._send_command(
             "SEND_STOP "
             + (remote if remote is not None else self._last_remote)
             + " " + (command if command is not None else self._last_command)) \
             is not None
 
     def get_remotes(self):
+        """
+        Returns a list of the names of the remotes known
+        to the Lirc server.
+        """
         return self._send_command("LIST")
 
     def get_commands(self, remote, include_codes=False):
+        """
+        Returns a list of the commands contained in the remote
+        given as argument.
+        If the optional argument include_codes is True,
+        the hexadecimal codes of
+        the commands are also given, like irsend does.
+        """
         raw = self._send_command("LIST " + remote)
         if include_codes:
             return raw
@@ -233,16 +280,41 @@ class AbstractLircClient:
         return result
 
     def set_transmitters(self, transmitters):
+        """
+        Requests the Lirc server to use the given transmitters for
+        future transmissions.
+        The argument should be a list of integers,
+        corresponding to the desired
+        transmitters. The first transmitter has number 1.
+        Not all Lirc servers accept
+        or implement this command.
+        Note that error messages from Lircd are not always reliable.
+        If the Lirc server gives an error, a LircServerException is thrown.
+        """
         mask = 0
         for transmitter in transmitters:
             mask |= (1 << (int(transmitter) - 1))
         return self.set_transmitters_mask(mask) is not None
 
     def set_transmitters_mask(self, mask):
+        """
+        Requests the Lirc server to use the given transmitters by
+        the arguments for
+        future transmissions.
+        The argument is an integer, were bit n is set if the n+1 transmitter
+        is to be enabled.
+        The first transmitter has number 1.
+        Not all Lirc servers accept
+        or implement this command.
+        Note that error messages from Lircd are not always reliable.
+        If the Lirc server gives an error,
+        a LircServerException is thrown.
+        """
         s = "SET_TRANSMITTERS " + str(mask)
         return self._send_command(s) is not None
 
     def get_version(self):
+        """Returns the version string of the Lirc server."""
         result = self._send_command("VERSION")
         version = result[0]
         return version
@@ -264,7 +336,10 @@ class AbstractLircClient:
 
 
 class UnixDomainSocketLircClient(AbstractLircClient):
-
+    """"
+    This class implements the LircClient with a Unix Domain Socket,
+    typically /var/run/lirc/lircd.
+    """
     def __init__(self, socketAddress=DEFAULT_LIRC_DEVICE, verbose=False):
         AbstractLircClient.__init__(self, verbose, None)
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -272,6 +347,10 @@ class UnixDomainSocketLircClient(AbstractLircClient):
 
 
 class TcpLircClient(AbstractLircClient):
+    """
+    This class implements the LirClient using a TCP network socket,
+    per default on port 8765.
+    """
 
     def __init__(self, address="localhost",
                  port=DEFAULT_PORT, verbose=False, timeout=None):
@@ -282,6 +361,10 @@ class TcpLircClient(AbstractLircClient):
 
 
 def _new_lirc_client(command_line_args):
+    """
+    Factory method that returns a concrete subclass of the LircClient,
+    depending on the argument.
+    """
     return UnixDomainSocketLircClient(command_line_args.socket_pathname,
                                       command_line_args.verbose) \
         if command_line_args.address is None else \
@@ -292,6 +375,7 @@ def _new_lirc_client(command_line_args):
 
 
 def main():
+    """Interface between the command line and the classes."""
     parser = argparse.ArgumentParser(prog='LircClient')
     parser.add_argument(
         "-a", "--address",
