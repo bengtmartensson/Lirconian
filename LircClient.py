@@ -36,10 +36,6 @@ There are some other subtile differences from irsend:
 * selectable timeout with --timeout (-t) option
 * better error messages
 
-The subcommands set_input_log, set_driver_options, and simulate are
-presently not implemented. (The first two are not documented for irsend
-anyhow...).  Help is welcome.
-
 It does not depend on anything but standard Python libraries.
 
 The name comes from the fact that the program requsts services from
@@ -251,6 +247,21 @@ class AbstractLircClient:
         version = result[0]
         return version
 
+    def set_input_log(self, path):
+        """Sets the input log path to lircd. If None. inhibit logging."""
+        self._send_command("SET_INPUTLOG " + path)
+
+    def set_driver_option(self, key, value):
+        """Sets a driver option to teh given value."""
+        self._send_command("DRV_OPTION " + key + " " + value)
+
+    def simulate(self, event_string):
+        """
+        Sends the argument string uninterpreted to the Lirc server
+        for simulation.
+        """
+        self._send_command("SIMULATE " + event_string)
+
 
 class UnixDomainSocketLircClient(AbstractLircClient):
 
@@ -360,18 +371,19 @@ def main():
 
     # Command set_driver_options
     parser_set_driver_options = subparsers.add_parser(
-        'set_driver_options',
-        help='Set driver options')
+        'set_driver_option',
+        help='Set driver option')
     parser_set_driver_options.add_argument('key', help='Name of the option')
     parser_set_driver_options.add_argument('value', help='Option value')
 
     # Command simulate
+    # The user must find out syntax & semantics of the even string himself ;-)
     parser_simulate = subparsers.add_parser(
         'simulate',
         help='Fake the reception of IR signals')
     parser_simulate.add_argument(
-        'data',
-        help='Key press data to be sent to the Lircd')
+        'event_string',
+        help='Event string to send to the Lirc server (ONE argument!)')
 
     # Command set_transmitters
     parser_set_transmitters = subparsers.add_parser(
@@ -410,14 +422,11 @@ def main():
             for line in result:
                 print(line)
         elif args.subcommand == 'set_input_log':
-            print("Subcommand not implemented yet, are YOU volunteering?")
-            exitstatus = 2
-        elif args.subcommand == 'set_driver_options':
-            print("Subcommand not implemented yet, are YOU volunteering?")
-            exitstatus = 2
+            lirc.set_input_log(args.log_file)
+        elif args.subcommand == 'set_driver_option':
+            lirc.set_driver_option(args.key, args.value)
         elif args.subcommand == 'simulate':
-            print("Subcommand not implemented yet, are YOU volunteering?")
-            exitstatus = 2
+            lirc.simulate(args.event_string)
         elif args.subcommand == 'set_transmitters':
             lirc.set_transmitters(args.transmitters)
         elif args.subcommand == 'version':
