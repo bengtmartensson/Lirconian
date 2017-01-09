@@ -402,7 +402,8 @@ class AbstractLircClient:
 
     def set_input_log(self, path):
         """Sets the input log path to lircd. If None. inhibit logging."""
-        self._send_command("SET_INPUTLOG " + path)
+        self._send_command("SET_INPUTLOG " + path or "")
+        # FIXME: error handling
 
     def set_driver_option(self, key, value):
         """Sets a driver option to teh given value."""
@@ -458,8 +459,8 @@ def _new_lirc_client(command_line_args):
         raise ClientInstantiationError(ex)
 
 
-def main():
-    """Interface between the command line and the classes."""
+def parse_commandline():
+    """ Parse command line args and options, returns a ArgumentParser. """
     parser = argparse.ArgumentParser(prog='LircClient')
     parser.add_argument(
         "-a", "--address",
@@ -567,8 +568,45 @@ def main():
         help='Inquire version of the Lirc server. '
         + ' (Use "--version" for the version of this program.)')
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def main():
+    """Interface between the command line and the classes."""
+
+    def do_list(args):
+        """ Run the LIST [remote] socket command. """
+        if args.remote:
+            result = lirc.get_commands(args.remote, args.codes)
+        else:
+            result = lirc.get_remotes()
+        for line in result:
+            print(line)
+
+
+    commands = {
+        'send_once':
+            lambda: lirc.send_ir_command(args.remote,
+                                         args.command,
+                                         args.count),
+        'send_start':
+            lambda: lirc.send_ir_command_repeat(args.remote, args.command),
+        'send_stop':
+            lambda: lirc.stop_ir(args.remote, args.command),
+        'list':
+            lambda: do_list(args),
+        'set_driver_option':
+            lambda: lirc.set_driver_option(args.key, args.value),
+        'simulate':
+            lambda: lirc.simulate(args.event_string),
+        'set_transmitters':
+            lambda: lirc.set_transmitters(args.transmitters),
+        'set_input_log':
+            lambda: lirc.set_input_log(args.log_file),
+        'version':
+            lambda: print(lirc.get_version()),
+    }
+    args = parse_commandline()
     if args.versionRequested:
         print(VERSION)
         sys.exit(0)
@@ -582,28 +620,8 @@ def main():
 
     try:
         exitstatus = 0
-
-        if args.subcommand == 'send_once':
-            lirc.send_ir_command(args.remote, args.command, args.count)
-        elif args.subcommand == 'send_start':
-            lirc.send_ir_command_repeat(args.remote, args.command)
-        elif args.subcommand == 'send_stop':
-            lirc.stop_ir(args.remote, args.command)
-        elif args.subcommand == 'list':
-            result = lirc.get_remotes() if args.remote is None \
-                else lirc.get_commands(args.remote, args.codes)
-            for line in result:
-                print(line)
-        elif args.subcommand == 'set_input_log':
-            lirc.set_input_log(args.log_file)
-        elif args.subcommand == 'set_driver_option':
-            lirc.set_driver_option(args.key, args.value)
-        elif args.subcommand == 'simulate':
-            lirc.simulate(args.event_string)
-        elif args.subcommand == 'set_transmitters':
-            lirc.set_transmitters(args.transmitters)
-        elif args.subcommand == 'version':
-            print(lirc.get_version())
+        if args.subcommand in commands:
+            commands[args.subcommand]()
         else:
             print('Unknown or missing subcommand, use --help for syntax.')
             exitstatus = 1
