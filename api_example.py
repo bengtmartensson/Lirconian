@@ -18,7 +18,7 @@ An somewhat silly example of using the API of LircClient to send and
 receive information from a Lirc server.
 """
 
-from LircClient import UnixDomainSocketLircClient
+from lirc_client import UnixDomainSocketLircClient
 
 lirc = UnixDomainSocketLircClient()
 # Uncomment if desired

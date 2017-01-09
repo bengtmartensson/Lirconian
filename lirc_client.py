@@ -137,10 +137,10 @@ class ReplyParser(object):
         if self._state == self._State.DONE:
             self.result = Result.OK
 
-##
-#  @defgroup FSM Internal parser FSM
-#  @{
-#  pylint: disable=missing-docstring,redefined-variable-type
+    ##
+    #  @defgroup FSM Internal parser FSM
+    #  @{
+    #  pylint: disable=missing-docstring,redefined-variable-type
 
     class _State(enum.Enum):
         ''' Internal FSM state. '''
@@ -211,12 +211,10 @@ class ReplyParser(object):
             self._state = self._State.BEGIN
         else:
             self._bad_packet_exception(line)
+    ## @}
+    #  pylint: enable=missing-docstring,redefined-variable-type
 
-## @}
-#  FSM
-#  pylint: enable=missing-docstring,redefined-variable-type
 
-#
 class AbstractLircClient:
     """
     Abstract base class for the LircClient. To implement the class,
@@ -227,7 +225,6 @@ class AbstractLircClient:
     _verbose = False
 
     _last_remote = None
-
 
     def __init__(self, verbose, timeout):
         self._verbose = verbose
