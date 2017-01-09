@@ -55,11 +55,10 @@ import re
 import os
 
 VERSION = "LircClient 0.1.0"
-READCHUNKLENGTH = 4096
-LINEFEED = 10
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
 DEFAULT_PORT = 8765
 
+_READCHUNKLENGTH = 4096
 
 class LircServerException(Exception):
     """This exception is thrown when the Lirc server responds with an error."""
@@ -100,6 +99,7 @@ class ReplyParser(object):
        - sighup: boolean, reflects if SIGHUP package has been received
          (these are otherwise ignored)
        - last_line: string, last input line (for error messages).
+       - is_completed: True if no more input is required.
     '''
 
     def __init__(self):
@@ -112,6 +112,7 @@ class ReplyParser(object):
         self._lines_expected = None
         self._buffer = bytearray(0)
 
+    @property
     def is_completed(self):
         ''' Returns true if no more reply input is required. '''
         return self.result != Result.INCOMPLETE
@@ -219,6 +220,9 @@ class AbstractLircClient:
     """
     Abstract base class for the LircClient. To implement the class,
     the abstract "socket" needs to be assigned to something sensible.
+    Public properties:
+         - timeout: ms, the timeout used in server communication.
+         - verbose: boolean, if True print some progress info
     """
 
     _socket = None
@@ -227,41 +231,26 @@ class AbstractLircClient:
     _last_remote = None
 
     def __init__(self, verbose, timeout):
-        self._verbose = verbose
-        self._timeout = timeout
+        self.timeout = timeout
+        self.verbose = verbose
         self._parser = ReplyParser()
-        self._in_buffer = ''
+        self._in_buffer = bytearray(0)
         self._last_command = None
-
-    def set_verbosity(self, verbosity):
-        """Set verbosity to the value of the argument."""
-        self._verbose = verbosity
 
     def close(self):
         """Close the connection."""
         self._socket.close()
-
-    def set_timeout(self, timeout):
-        """Set the timeout used for communication with the Lirc server."""
-        self._timeout = timeout
 
     def _read_line(self):
         """
         Return a line read from the socket.
         The input from the socket is buffered.
         """
-        if self._in_buffer is None or len(self._in_buffer) == 0:
-            self._in_buffer = self._socket.recv(READCHUNKLENGTH)
-
-        while LINEFEED not in self._in_buffer:
-            self._in_buffer += self._socket.recv(READCHUNKLENGTH)
-
-        n = self._in_buffer.find(LINEFEED)
-        if n == -1:
-            return None
-        line = self._in_buffer[0:n].decode("US-ASCII")
-        self._in_buffer = self._in_buffer[n + 1:len(self._in_buffer)]
-        return line
+        newline = b'\n'
+        while newline not in self._in_buffer:
+            self._in_buffer += self._socket.recv(_READCHUNKLENGTH)
+        line, self._in_buffer = self._in_buffer.split(newline, 1)
+        return line.decode("US-ASCII")
 
     def _send_string(self, cmd):
         """Sends a string to the Lirc server."""
@@ -275,7 +264,7 @@ class AbstractLircClient:
         and receives zero or more lines in response.
         Returns a list of those lines.
         """
-        if self._verbose:
+        if self.verbose:
             print("Sending: `" + packet
                   + "' to Lirc@" + self._socket.__str__())
 
@@ -284,16 +273,15 @@ class AbstractLircClient:
         result = []
         success = True
 
-        while not self._parser.is_completed():
+        while not self._parser.is_completed:
             string = self._read_line()
             string.strip()
-            if string is None:
+            if not string:
                 continue
-            if self._verbose:
-                print('Received: "{0}"'.format(
-                    (string if string is not None else '')))
+            if self.verbose:
+                print('Received: "{0}"'.format(string or ''))
             self._parser.feed(string)
-        if self._verbose:
+        if self.verbose:
             print("Command " +
                   ("succeded." if self._parser.success else "failed."))
         if not success:
@@ -333,8 +321,8 @@ class AbstractLircClient:
         """
         return self._send_command(
             "SEND_STOP "
-            + (remote if remote is not None else self._last_remote)
-            + " " + (command if command is not None else self._last_command)) \
+            + (remote if remote else self._last_remote)
+            + " " + (command if command else self._last_command)) \
             is not None
 
     def get_remotes(self):
@@ -633,7 +621,7 @@ def main():
         print("Malformed or unexpected package received: {0}".format(ex))
         exitstatus = 4
 
-    if lirc is not None:
+    if lirc:
         lirc.close()
 
     sys.exit(exitstatus)
