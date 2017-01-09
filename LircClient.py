@@ -48,6 +48,7 @@ https://github.com/bengtmartensson/JavaLircClient
 """
 
 import argparse
+import enum
 import socket
 import sys
 import re
@@ -83,32 +84,157 @@ class ClientInstantiationError(Exception):
     pass
 
 
+class Result(enum.Enum):
+    ''' Public reply parser result, available when completed. '''
+    OK = 1
+    FAIL = 2
+    INCOMPLETE = 3
+
+
+class ReplyParser(object):
+    '''
+    Handles parsing of reply packet. Public accessors:
+       - result: Enum Result, reflects parser state.
+       - success: boolean, reflects SUCCESS/ERROR.
+       - data: List of lines, the command DATA payload.
+       - sighup: boolean, reflects if SIGHUP package has been received
+         (these are otherwise ignored)
+       - last_line: string, last input line (for error messages).
+    '''
+
+    def __init__(self):
+        self.result = Result.INCOMPLETE
+        self.success = None
+        self.data = []
+        self.last_line = ""
+        self.sighup = False
+        self._state = self._State.BEGIN
+        self._lines_expected = None
+        self._buffer = bytearray(0)
+
+    def is_completed(self):
+        ''' Returns true if no more reply input is required. '''
+        return self.result != Result.INCOMPLETE
+
+    def feed(self, line):
+        ''' Enter a line of data into parsing FSM, update state. '''
+
+        fsm = {
+            self._State.BEGIN: self._begin,
+            self._State.COMMAND: self._command,
+            self._State.RESULT: self._result,
+            self._State.DATA: self._data,
+            self._State.LINE_COUNT: self._line_count,
+            self._State.LINES: self._lines,
+            self._State.END: self._end,
+            self._State.SIGHUP_END: self._sighup_end
+        }
+        line = line.strip()
+        if not line:
+            return
+        self.last_line = line
+        fsm[self._state](line)
+        if self._state == self._State.DONE:
+            self.result = Result.OK
+
+##
+#  @defgroup FSM Internal parser FSM
+#  @{
+#  pylint: disable=missing-docstring,redefined-variable-type
+
+    class _State(enum.Enum):
+        ''' Internal FSM state. '''
+        BEGIN = 1
+        COMMAND = 2
+        RESULT = 3
+        DATA = 4
+        LINE_COUNT = 5
+        LINES = 6
+        END = 7
+        DONE = 8
+        NO_DATA = 9
+        SIGHUP_END = 10
+
+    def _bad_packet_exception(self, line):
+        raise BadPacketException(
+            "Cannot parse: %s\nat state: %s\n" % (line, self._state))
+
+    def _begin(self, line):
+        if line == "BEGIN":
+            self._state = self._State.COMMAND
+
+    def _command(self, line):
+        if not line:
+            self._bad_packet_exception(line)
+        self._state = self._State.RESULT
+
+    def _result(self, line):
+        if line in ["SUCCESS", "ERROR"]:
+            self.success = line == "SUCCESS"
+            self._state = self._State.DATA
+        elif line == "SIGHUP":
+            self._state = self._State.SIGHUP_END
+            self.sighup = True
+        else:
+            self._bad_packet_exception(line)
+
+    def _data(self, line):
+        if line == "END":
+            self._state = self._State.DONE
+        elif line == "DATA":
+            self._state = self._State.LINE_COUNT
+        else:
+            self._bad_packet_exception(line)
+
+    def _line_count(self, line):
+        try:
+            self._lines_expected = int(line)
+        except ValueError:
+            self._bad_packet_exception(line)
+        if self._lines_expected == 0:
+            self._state = self._State.END
+        else:
+            self._state = self._State.LINES
+
+    def _lines(self, line):
+        self.data.append(line)
+        if len(self.data) >= self._lines_expected:
+            self._state = self._State.END
+
+    def _end(self, line):
+        if line != "END":
+            self._bad_packet_exception(line)
+        self._state = self._State.DONE
+
+    def _sighup_end(self, line):
+        if line == "END":
+            self._state = self._State.BEGIN
+        else:
+            self._bad_packet_exception(line)
+
+## @}
+#  FSM
+#  pylint: enable=missing-docstring,redefined-variable-type
+
+#
 class AbstractLircClient:
     """
     Abstract base class for the LircClient. To implement the class,
     the abstract "socket" needs to be assigned to something sensible.
     """
-    P_BEGIN = 0
-    P_MESSAGE = 1
-    P_STATUS = 2
-    P_DATA = 3
-    P_N = 4
-    P_DATA_N = 5
-    P_END = 6
-    P_DONE = 7
 
     _socket = None
     _verbose = False
-    _timeout = None
 
     _last_remote = None
-    _last_command = None
-    _socket = None
-    _in_buffer = None
+
 
     def __init__(self, verbose, timeout):
         self._verbose = verbose
         self._timeout = timeout
+        self._parser = ReplyParser()
+        self._in_buffer = ''
+        self._last_command = None
 
     def set_verbosity(self, verbosity):
         """Set verbosity to the value of the argument."""
@@ -149,7 +275,7 @@ class AbstractLircClient:
     def _send_command(self, packet):
         """
         Sends its argument string to the Lirc server,
-        and receives one or many lines in response.
+        and receives zero or more lines in response.
         Returns a list of those lines.
         """
         if self._verbose:
@@ -161,68 +287,21 @@ class AbstractLircClient:
         result = []
         success = True
 
-        state = self.P_BEGIN
-        lines_receives = 0
-        lines_expected = -1
-
-        while state != self.P_DONE:
+        while not self._parser.is_completed():
             string = self._read_line()
+            string.strip()
+            if string is None:
+                continue
             if self._verbose:
                 print('Received: "{0}"'.format(
                     (string if string is not None else '')))
-
-            if string is None:
-                state = self.P_DONE
-                continue
-
-            if state == self.P_BEGIN:
-                if string == "BEGIN":
-                    state = self.P_MESSAGE
-            elif state == self.P_MESSAGE:
-                state = \
-                    self.P_STATUS if string.strip().lower() == packet.lower() \
-                    else self.P_BEGIN
-            elif state == self.P_STATUS:
-                if string == "SUCCESS":
-                    state = self.P_DATA
-                elif string == "END":
-                    state = self.P_DONE
-                elif string == "ERROR":
-                    state = self.P_DATA
-                    success = False
-                else:
-                    raise BadPacketException(string)
-            elif state == self.P_DATA:
-                if string == "END":
-                    state = self.P_DONE
-                elif string == "DATA":
-                    state = self.P_N
-                else:
-                    raise BadPacketException(string)
-            elif state == self.P_N:
-                lines_expected = int(string)
-                state = self.P_END if lines_expected == 0 else self.P_DATA_N
-            elif state == self.P_DATA_N:
-                result.append(string)
-                lines_receives += 1
-                if lines_receives == lines_expected:
-                    state = self.P_END
-            elif state == self.P_END:
-                if string == "END":
-                    state = self.P_DONE
-                else:
-                    raise BadPacketException(string)
-            else:
-                raise ThisCannotHappenException(
-                    "Unhandled case (programming error)")
-
+            self._parser.feed(string)
         if self._verbose:
-            print("Command " + ("succeded." if success else "failed."))
-
+            print("Command " +
+                  ("succeded." if self._parser.success else "failed."))
         if not success:
             raise LircServerException(''.join(result))
-
-        return result
+        return self._parser.data
 
     def send_ir_command(self, remote, command, count):
         """
