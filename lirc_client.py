@@ -447,25 +447,27 @@ def _new_lirc_client(command_line_args):
 
 def parse_commandline():
     """ Parse command line args and options, returns a ArgumentParser. """
-    parser = argparse.ArgumentParser(prog='LircClient')
+    parser = argparse.ArgumentParser(
+        prog='LircClient',
+        description="Tool to send IR codes and manipulate lircd(8)")
     parser.add_argument(
         "-a", "--address",
         help='IP name or address of lircd host. '
         + 'Takes preference over --device.',
-        dest='address', default=None)
+        metavar='host', dest='address', default=None)
     socket_path = os.environ['LIRC_SOCKET_PATH'] \
         if 'LIRC_SOCKET_PATH' in os.environ else DEFAULT_LIRC_DEVICE
     parser.add_argument(
         '-d', '--device',
-        help='Path name of the lircd socket',
+        help='Path name of the lircd socket', metavar='path',
         dest='socket_pathname', default=socket_path)
     parser.add_argument(
         '-p', '--port',
-        help='Port of lircd, default ' + str(DEFAULT_PORT),
+        help='Port of lircd, default ' + str(DEFAULT_PORT), metavar='port',
         dest='port', default=DEFAULT_PORT, type=int)
     parser.add_argument(
         '-t', '--timeout',
-        help='Timeout in milliseconds',
+        help='Timeout in milliseconds', metavar='ms',
         dest='timeout', type=int, default=None)
     parser.add_argument(
         '-V', '--version',
@@ -476,7 +478,8 @@ def parse_commandline():
         help='Have some commands executed verbosely',
         dest='verbose', action='store_true')
 
-    subparsers = parser.add_subparsers(dest='subcommand')
+    subparsers = \
+        parser.add_subparsers(dest='subcommand', metavar='sub-commands')
 
     # Command send_once
     parser_send_once = subparsers.add_parser(
