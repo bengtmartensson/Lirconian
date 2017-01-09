@@ -19,16 +19,16 @@
 This is a new and independent implementation of the Lirc irsend(1) program.
 It offers a Python API and a command line interface. The command line
 interface is almost, but not quite, compatible with irsend. Instead, it is
-organized as a program with subcommands, send_once, etc.
+organized as a program with subcommands, send-once, etc.
 
 There are some other subtile differences from irsend:
 
 * subcommand must be lower case,
-* send_once only takes one command (irsend takes several),
-* send_stop without arguments uses the remote and the command from the
-  last send_start command (API only; not from the command line),
+* send-once only takes one command (irsend takes several),
+* send-stop without arguments uses the remote and the command from the
+  last send-start command (API only; not from the command line),
 * no need to give dummy empty arguments for commands like list,
-* The --count argument to send_once is argument to the subcommand.
+* The --count argument to send-once is argument to the subcommand.
 * the code in list remote is suppressed, unless -c is given,
 * port number must be given with the --port (-p) argument; hostip:portnumber
   is not recognized,
@@ -481,28 +481,28 @@ def parse_commandline():
     subparsers = \
         parser.add_subparsers(dest='subcommand', metavar='sub-commands')
 
-    # Command send_once
+    # Command send-once
     parser_send_once = subparsers.add_parser(
-        'send_once',
+        'send-once',
         help='Send one command')
     parser_send_once.add_argument(
         '-#', '-c', '--count',
-        help='Number of times to send command in send_once',
+        help='Number of times to send command in send-once',
         dest='count', type=int, default=1)
     parser_send_once.add_argument('remote', help='Name of remote')
     parser_send_once.add_argument('command', help='Name of command')
 
-    # Command send_start
+    # Command send-start
     parser_send_start = subparsers.add_parser(
-        'send_start',
+        'send-start',
         help='Start sending one command until stopped')
     parser_send_start.add_argument('remote', help='Name of remote')
     parser_send_start.add_argument('command', help='Name of command')
 
-    # Command send_stop
+    # Command send-stop
     parser_send_stop = subparsers.add_parser(
-        'send_stop',
-        help='Stop sending the command from send_start')
+        'send-stop',
+        help='Stop sending the command from send-start')
     parser_send_stop.add_argument('remote', help='remote command')
     parser_send_stop.add_argument('command', help='remote command')
 
@@ -521,7 +521,7 @@ def parse_commandline():
 
     # Command set_input_logging
     parser_set_input_log = subparsers.add_parser(
-        'set_input_log',
+        'set-input-log',
         help='Set input logging')
     parser_set_input_log.add_argument(
         'log_file', nargs='?',
@@ -529,7 +529,7 @@ def parse_commandline():
 
     # Command set_driver_options
     parser_set_driver_options = subparsers.add_parser(
-        'set_driver_option',
+        'set-driver-option',
         help='Set driver option')
     parser_set_driver_options.add_argument('key', help='Name of the option')
     parser_set_driver_options.add_argument('value', help='Option value')
@@ -545,7 +545,7 @@ def parse_commandline():
 
     # Command set_transmitters
     parser_set_transmitters = subparsers.add_parser(
-        'set_transmitters',
+        'set-transmitters',
         help='Set transmitters')
     parser_set_transmitters.add_argument(
         'transmitters', nargs='+',
@@ -573,23 +573,23 @@ def main():
             print(line)
 
     commands = {
-        'send_once':
+        'send-once':
             lambda: lirc.send_ir_command(args.remote,
                                          args.command,
                                          args.count),
-        'send_start':
+        'send-start':
             lambda: lirc.send_ir_command_repeat(args.remote, args.command),
-        'send_stop':
+        'send-stop':
             lambda: lirc.stop_ir(args.remote, args.command),
         'list':
             lambda: do_list(args),
-        'set_driver_option':
+        'set-driver-option':
             lambda: lirc.set_driver_option(args.key, args.value),
         'simulate':
             lambda: lirc.simulate(args.event_string),
-        'set_transmitters':
+        'set-transmitters':
             lambda: lirc.set_transmitters(args.transmitters),
-        'set_input_log':
+        'set-input-log':
             lambda: lirc.set_input_log(args.log_file),
         'version':
             lambda: print(lirc.get_version()),
