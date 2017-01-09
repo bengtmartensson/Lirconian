@@ -60,6 +60,7 @@ DEFAULT_PORT = 8765
 
 _READCHUNKLENGTH = 4096
 
+
 class LircServerException(Exception):
     """This exception is thrown when the Lirc server responds with an error."""
     pass
@@ -225,17 +226,14 @@ class AbstractLircClient:
          - verbose: boolean, if True print some progress info
     """
 
-    _socket = None
-    _verbose = False
-
-    _last_remote = None
-
     def __init__(self, verbose, timeout):
         self.timeout = timeout
         self.verbose = verbose
         self._parser = ReplyParser()
+        self._socket = None
         self._in_buffer = bytearray(0)
         self._last_command = None
+        self._last_remote = None
 
     def close(self):
         """Close the connection."""
@@ -570,7 +568,6 @@ def main():
             result = lirc.get_remotes()
         for line in result:
             print(line)
-
 
     commands = {
         'send_once':
