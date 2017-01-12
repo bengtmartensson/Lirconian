@@ -12,13 +12,15 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see http://www.gnu.org/licenses/.
 
+# pylint: disable=invalid-name
+
 
 """
 An somewhat silly example of using the API of LircClient to send and
 receive information from a Lirc server.
 """
 
-from LircClient import UnixDomainSocketLircClient
+from lirc_client import UnixDomainSocketLircClient
 
 lirc = UnixDomainSocketLircClient()
 # Uncomment if desired

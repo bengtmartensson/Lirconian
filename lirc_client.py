@@ -19,16 +19,16 @@
 This is a new and independent implementation of the Lirc irsend(1) program.
 It offers a Python API and a command line interface. The command line
 interface is almost, but not quite, compatible with irsend. Instead, it is
-organized as a program with subcommands, send_once, etc.
+organized as a program with subcommands, send-once, etc.
 
 There are some other subtile differences from irsend:
 
 * subcommand must be lower case,
-* send_once only takes one command (irsend takes several),
-* send_stop without arguments uses the remote and the command from the
-  last send_start command (API only; not from the command line),
+* send-once only takes one command (irsend takes several),
+* send-stop without arguments uses the remote and the command from the
+  last send-start command (API only; not from the command line),
 * no need to give dummy empty arguments for commands like list,
-* The --count argument to send_once is argument to the subcommand.
+* The --count argument to send-once is argument to the subcommand.
 * the code in list remote is suppressed, unless -c is given,
 * port number must be given with the --port (-p) argument; hostip:portnumber
   is not recognized,
@@ -48,16 +48,17 @@ https://github.com/bengtmartensson/JavaLircClient
 """
 
 import argparse
+import enum
 import socket
 import sys
 import re
 import os
 
 VERSION = "LircClient 0.1.0"
-READCHUNKLENGTH = 4096
-LINEFEED = 10
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
 DEFAULT_PORT = 8765
+
+_READCHUNKLENGTH = 4096
 
 
 class LircServerException(Exception):
@@ -83,62 +84,171 @@ class ClientInstantiationError(Exception):
     pass
 
 
+class Result(enum.Enum):
+    ''' Public reply parser result, available when completed. '''
+    OK = 1
+    FAIL = 2
+    INCOMPLETE = 3
+
+
+class ReplyParser(object):
+    '''
+    Handles parsing of reply packet. Public accessors:
+       - result: Enum Result, reflects parser state.
+       - success: boolean, reflects SUCCESS/ERROR.
+       - data: List of lines, the command DATA payload.
+       - sighup: boolean, reflects if SIGHUP package has been received
+         (these are otherwise ignored)
+       - last_line: string, last input line (for error messages).
+       - is_completed: True if no more input is required.
+    '''
+
+    def __init__(self):
+        self.result = Result.INCOMPLETE
+        self.success = None
+        self.data = []
+        self.last_line = ""
+        self.sighup = False
+        self._state = self._State.BEGIN
+        self._lines_expected = None
+        self._buffer = bytearray(0)
+
+    @property
+    def is_completed(self):
+        ''' Returns true if no more reply input is required. '''
+        return self.result != Result.INCOMPLETE
+
+    def feed(self, line):
+        ''' Enter a line of data into parsing FSM, update state. '''
+
+        fsm = {
+            self._State.BEGIN: self._begin,
+            self._State.COMMAND: self._command,
+            self._State.RESULT: self._result,
+            self._State.DATA: self._data,
+            self._State.LINE_COUNT: self._line_count,
+            self._State.LINES: self._lines,
+            self._State.END: self._end,
+            self._State.SIGHUP_END: self._sighup_end
+        }
+        line = line.strip()
+        if not line:
+            return
+        self.last_line = line
+        fsm[self._state](line)
+        if self._state == self._State.DONE:
+            self.result = Result.OK
+
+    ##
+    #  @defgroup FSM Internal parser FSM
+    #  @{
+    #  pylint: disable=missing-docstring,redefined-variable-type
+
+    class _State(enum.Enum):
+        ''' Internal FSM state. '''
+        BEGIN = 1
+        COMMAND = 2
+        RESULT = 3
+        DATA = 4
+        LINE_COUNT = 5
+        LINES = 6
+        END = 7
+        DONE = 8
+        NO_DATA = 9
+        SIGHUP_END = 10
+
+    def _bad_packet_exception(self, line):
+        raise BadPacketException(
+            "Cannot parse: %s\nat state: %s\n" % (line, self._state))
+
+    def _begin(self, line):
+        if line == "BEGIN":
+            self._state = self._State.COMMAND
+
+    def _command(self, line):
+        if not line:
+            self._bad_packet_exception(line)
+        self._state = self._State.RESULT
+
+    def _result(self, line):
+        if line in ["SUCCESS", "ERROR"]:
+            self.success = line == "SUCCESS"
+            self._state = self._State.DATA
+        elif line == "SIGHUP":
+            self._state = self._State.SIGHUP_END
+            self.sighup = True
+        else:
+            self._bad_packet_exception(line)
+
+    def _data(self, line):
+        if line == "END":
+            self._state = self._State.DONE
+        elif line == "DATA":
+            self._state = self._State.LINE_COUNT
+        else:
+            self._bad_packet_exception(line)
+
+    def _line_count(self, line):
+        try:
+            self._lines_expected = int(line)
+        except ValueError:
+            self._bad_packet_exception(line)
+        if self._lines_expected == 0:
+            self._state = self._State.END
+        else:
+            self._state = self._State.LINES
+
+    def _lines(self, line):
+        self.data.append(line)
+        if len(self.data) >= self._lines_expected:
+            self._state = self._State.END
+
+    def _end(self, line):
+        if line != "END":
+            self._bad_packet_exception(line)
+        self._state = self._State.DONE
+
+    def _sighup_end(self, line):
+        if line == "END":
+            self._state = self._State.BEGIN
+        else:
+            self._bad_packet_exception(line)
+    ## @}
+    #  pylint: enable=missing-docstring,redefined-variable-type
+
+
 class AbstractLircClient:
     """
     Abstract base class for the LircClient. To implement the class,
     the abstract "socket" needs to be assigned to something sensible.
+    Public properties:
+         - timeout: ms, the timeout used in server communication.
+         - verbose: boolean, if True print some progress info
     """
-    P_BEGIN = 0
-    P_MESSAGE = 1
-    P_STATUS = 2
-    P_DATA = 3
-    P_N = 4
-    P_DATA_N = 5
-    P_END = 6
-    P_DONE = 7
-
-    _socket = None
-    _verbose = False
-    _timeout = None
-
-    _last_remote = None
-    _last_command = None
-    _socket = None
-    _in_buffer = None
 
     def __init__(self, verbose, timeout):
-        self._verbose = verbose
-        self._timeout = timeout
-
-    def set_verbosity(self, verbosity):
-        """Set verbosity to the value of the argument."""
-        self._verbose = verbosity
+        self.timeout = timeout
+        self.verbose = verbose
+        self._parser = ReplyParser()
+        self._socket = None
+        self._in_buffer = bytearray(0)
+        self._last_command = None
+        self._last_remote = None
 
     def close(self):
         """Close the connection."""
         self._socket.close()
-
-    def set_timeout(self, timeout):
-        """Set the timeout used for communication with the Lirc server."""
-        self._timeout = timeout
 
     def _read_line(self):
         """
         Return a line read from the socket.
         The input from the socket is buffered.
         """
-        if self._in_buffer is None or len(self._in_buffer) == 0:
-            self._in_buffer = self._socket.recv(READCHUNKLENGTH)
-
-        while LINEFEED not in self._in_buffer:
-            self._in_buffer += self._socket.recv(READCHUNKLENGTH)
-
-        n = self._in_buffer.find(LINEFEED)
-        if n == -1:
-            return None
-        line = self._in_buffer[0:n].decode("US-ASCII")
-        self._in_buffer = self._in_buffer[n + 1:len(self._in_buffer)]
-        return line
+        newline = b'\n'
+        while newline not in self._in_buffer:
+            self._in_buffer += self._socket.recv(_READCHUNKLENGTH)
+        line, self._in_buffer = self._in_buffer.split(newline, 1)
+        return line.decode("US-ASCII")
 
     def _send_string(self, cmd):
         """Sends a string to the Lirc server."""
@@ -149,10 +259,10 @@ class AbstractLircClient:
     def _send_command(self, packet):
         """
         Sends its argument string to the Lirc server,
-        and receives one or many lines in response.
+        and receives zero or more lines in response.
         Returns a list of those lines.
         """
-        if self._verbose:
+        if self.verbose:
             print("Sending: `" + packet
                   + "' to Lirc@" + self._socket.__str__())
 
@@ -161,68 +271,20 @@ class AbstractLircClient:
         result = []
         success = True
 
-        state = self.P_BEGIN
-        lines_receives = 0
-        lines_expected = -1
-
-        while state != self.P_DONE:
+        while not self._parser.is_completed:
             string = self._read_line()
-            if self._verbose:
-                print('Received: "{0}"'.format(
-                    (string if string is not None else '')))
-
-            if string is None:
-                state = self.P_DONE
+            string.strip()
+            if not string:
                 continue
-
-            if state == self.P_BEGIN:
-                if string == "BEGIN":
-                    state = self.P_MESSAGE
-            elif state == self.P_MESSAGE:
-                state = \
-                    self.P_STATUS if string.strip().lower() == packet.lower() \
-                    else self.P_BEGIN
-            elif state == self.P_STATUS:
-                if string == "SUCCESS":
-                    state = self.P_DATA
-                elif string == "END":
-                    state = self.P_DONE
-                elif string == "ERROR":
-                    state = self.P_DATA
-                    success = False
-                else:
-                    raise BadPacketException(string)
-            elif state == self.P_DATA:
-                if string == "END":
-                    state = self.P_DONE
-                elif string == "DATA":
-                    state = self.P_N
-                else:
-                    raise BadPacketException(string)
-            elif state == self.P_N:
-                lines_expected = int(string)
-                state = self.P_END if lines_expected == 0 else self.P_DATA_N
-            elif state == self.P_DATA_N:
-                result.append(string)
-                lines_receives += 1
-                if lines_receives == lines_expected:
-                    state = self.P_END
-            elif state == self.P_END:
-                if string == "END":
-                    state = self.P_DONE
-                else:
-                    raise BadPacketException(string)
-            else:
-                raise ThisCannotHappenException(
-                    "Unhandled case (programming error)")
-
-        if self._verbose:
-            print("Command " + ("succeded." if success else "failed."))
-
+            if self.verbose:
+                print('Received: "{0}"'.format(string or ''))
+            self._parser.feed(string)
+        if self.verbose:
+            print("Command " +
+                  ("succeded." if self._parser.success else "failed."))
         if not success:
             raise LircServerException(''.join(result))
-
-        return result
+        return self._parser.data
 
     def send_ir_command(self, remote, command, count):
         """
@@ -257,8 +319,8 @@ class AbstractLircClient:
         """
         return self._send_command(
             "SEND_STOP "
-            + (remote if remote is not None else self._last_remote)
-            + " " + (command if command is not None else self._last_command)) \
+            + (remote if remote else self._last_remote)
+            + " " + (command if command else self._last_command)) \
             is not None
 
     def get_remotes(self):
@@ -326,7 +388,8 @@ class AbstractLircClient:
 
     def set_input_log(self, path):
         """Sets the input log path to lircd. If None. inhibit logging."""
-        self._send_command("SET_INPUTLOG " + path)
+        self._send_command("SET_INPUTLOG " + path or "")
+        # FIXME: error handling
 
     def set_driver_option(self, key, value):
         """Sets a driver option to teh given value."""
@@ -382,27 +445,29 @@ def _new_lirc_client(command_line_args):
         raise ClientInstantiationError(ex)
 
 
-def main():
-    """Interface between the command line and the classes."""
-    parser = argparse.ArgumentParser(prog='LircClient')
+def parse_commandline():
+    """ Parse command line args and options, returns a ArgumentParser. """
+    parser = argparse.ArgumentParser(
+        prog='LircClient',
+        description="Tool to send IR codes and manipulate lircd(8)")
     parser.add_argument(
         "-a", "--address",
         help='IP name or address of lircd host. '
         + 'Takes preference over --device.',
-        dest='address', default=None)
+        metavar='host', dest='address', default=None)
     socket_path = os.environ['LIRC_SOCKET_PATH'] \
         if 'LIRC_SOCKET_PATH' in os.environ else DEFAULT_LIRC_DEVICE
     parser.add_argument(
         '-d', '--device',
-        help='Path name of the lircd socket',
+        help='Path name of the lircd socket', metavar='path',
         dest='socket_pathname', default=socket_path)
     parser.add_argument(
         '-p', '--port',
-        help='Port of lircd, default ' + str(DEFAULT_PORT),
+        help='Port of lircd, default ' + str(DEFAULT_PORT), metavar='port',
         dest='port', default=DEFAULT_PORT, type=int)
     parser.add_argument(
         '-t', '--timeout',
-        help='Timeout in milliseconds',
+        help='Timeout in milliseconds', metavar='ms',
         dest='timeout', type=int, default=None)
     parser.add_argument(
         '-V', '--version',
@@ -413,30 +478,31 @@ def main():
         help='Have some commands executed verbosely',
         dest='verbose', action='store_true')
 
-    subparsers = parser.add_subparsers(dest='subcommand')
+    subparsers = \
+        parser.add_subparsers(dest='subcommand', metavar='sub-commands')
 
-    # Command send_once
+    # Command send-once
     parser_send_once = subparsers.add_parser(
-        'send_once',
+        'send-once',
         help='Send one command')
     parser_send_once.add_argument(
         '-#', '-c', '--count',
-        help='Number of times to send command in send_once',
+        help='Number of times to send command in send-once',
         dest='count', type=int, default=1)
     parser_send_once.add_argument('remote', help='Name of remote')
     parser_send_once.add_argument('command', help='Name of command')
 
-    # Command send_start
+    # Command send-start
     parser_send_start = subparsers.add_parser(
-        'send_start',
+        'send-start',
         help='Start sending one command until stopped')
     parser_send_start.add_argument('remote', help='Name of remote')
     parser_send_start.add_argument('command', help='Name of command')
 
-    # Command send_stop
+    # Command send-stop
     parser_send_stop = subparsers.add_parser(
-        'send_stop',
-        help='Stop sending the command from send_start')
+        'send-stop',
+        help='Stop sending the command from send-start')
     parser_send_stop.add_argument('remote', help='remote command')
     parser_send_stop.add_argument('command', help='remote command')
 
@@ -455,7 +521,7 @@ def main():
 
     # Command set_input_logging
     parser_set_input_log = subparsers.add_parser(
-        'set_input_log',
+        'set-input-log',
         help='Set input logging')
     parser_set_input_log.add_argument(
         'log_file', nargs='?',
@@ -463,7 +529,7 @@ def main():
 
     # Command set_driver_options
     parser_set_driver_options = subparsers.add_parser(
-        'set_driver_option',
+        'set-driver-option',
         help='Set driver option')
     parser_set_driver_options.add_argument('key', help='Name of the option')
     parser_set_driver_options.add_argument('value', help='Option value')
@@ -479,7 +545,7 @@ def main():
 
     # Command set_transmitters
     parser_set_transmitters = subparsers.add_parser(
-        'set_transmitters',
+        'set-transmitters',
         help='Set transmitters')
     parser_set_transmitters.add_argument(
         'transmitters', nargs='+',
@@ -491,8 +557,44 @@ def main():
         help='Inquire version of the Lirc server. '
         + ' (Use "--version" for the version of this program.)')
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def main():
+    """Interface between the command line and the classes."""
+
+    def do_list(args):
+        """ Run the LIST [remote] socket command. """
+        if args.remote:
+            result = lirc.get_commands(args.remote, args.codes)
+        else:
+            result = lirc.get_remotes()
+        for line in result:
+            print(line)
+
+    commands = {
+        'send-once':
+            lambda: lirc.send_ir_command(args.remote,
+                                         args.command,
+                                         args.count),
+        'send-start':
+            lambda: lirc.send_ir_command_repeat(args.remote, args.command),
+        'send-stop':
+            lambda: lirc.stop_ir(args.remote, args.command),
+        'list':
+            lambda: do_list(args),
+        'set-driver-option':
+            lambda: lirc.set_driver_option(args.key, args.value),
+        'simulate':
+            lambda: lirc.simulate(args.event_string),
+        'set-transmitters':
+            lambda: lirc.set_transmitters(args.transmitters),
+        'set-input-log':
+            lambda: lirc.set_input_log(args.log_file),
+        'version':
+            lambda: print(lirc.get_version()),
+    }
+    args = parse_commandline()
     if args.versionRequested:
         print(VERSION)
         sys.exit(0)
@@ -506,28 +608,8 @@ def main():
 
     try:
         exitstatus = 0
-
-        if args.subcommand == 'send_once':
-            lirc.send_ir_command(args.remote, args.command, args.count)
-        elif args.subcommand == 'send_start':
-            lirc.send_ir_command_repeat(args.remote, args.command)
-        elif args.subcommand == 'send_stop':
-            lirc.stop_ir(args.remote, args.command)
-        elif args.subcommand == 'list':
-            result = lirc.get_remotes() if args.remote is None \
-                else lirc.get_commands(args.remote, args.codes)
-            for line in result:
-                print(line)
-        elif args.subcommand == 'set_input_log':
-            lirc.set_input_log(args.log_file)
-        elif args.subcommand == 'set_driver_option':
-            lirc.set_driver_option(args.key, args.value)
-        elif args.subcommand == 'simulate':
-            lirc.simulate(args.event_string)
-        elif args.subcommand == 'set_transmitters':
-            lirc.set_transmitters(args.transmitters)
-        elif args.subcommand == 'version':
-            print(lirc.get_version())
+        if args.subcommand in commands:
+            commands[args.subcommand]()
         else:
             print('Unknown or missing subcommand, use --help for syntax.')
             exitstatus = 1
@@ -539,7 +621,7 @@ def main():
         print("Malformed or unexpected package received: {0}".format(ex))
         exitstatus = 4
 
-    if lirc is not None:
+    if lirc:
         lirc.close()
 
     sys.exit(exitstatus)
