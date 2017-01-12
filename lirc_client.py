@@ -33,7 +33,7 @@ There are some other subtile differences from irsend:
 * port number must be given with the --port (-p) argument; hostip:portnumber
   is not recognized,
 * verbose option --verbose (-v); echos all communication with the Lirc server,
-* selectable timeout with --timeout (-t) option
+* selectable timeout with --timeout (-t) option,
 * better error messages
 
 It does not depend on anything but standard Python libraries.
@@ -84,12 +84,9 @@ class AbstractLircClient:
     """
     Abstract base class for the LircClient. To implement the class,
     the abstract "socket" needs to be assigned to something sensible.
-    Public properties:
-         - timeout: ms, the timeout used in server communication.
     """
 
-    def __init__(self, verbose, timeout):
-        self.timeout = timeout
+    def __init__(self, verbose):
         self._verbose = verbose
         self._parser = ReplyParser()
         self._socket = None
@@ -265,15 +262,24 @@ class AbstractLircClient:
         """Sets the verbosity of the instance."""
         self._verbose = verbose
 
+    def set_timeout(self, timeout):
+        """
+        Sets the timeout of the socket to the value of the argument.
+         Unit is seconds.
+         """
+        self._socket.settimeout(timeout)
+
 
 class UnixDomainSocketLircClient(AbstractLircClient):
     """"
     This class implements the LircClient with a Unix Domain Socket,
     typically /var/run/lirc/lircd.
     """
-    def __init__(self, socketAddress=DEFAULT_LIRC_DEVICE, verbose=False):
-        AbstractLircClient.__init__(self, verbose, None)
+    def __init__(self, socketAddress=DEFAULT_LIRC_DEVICE,
+                 verbose=False, timeout=None):
+        AbstractLircClient.__init__(self, verbose)
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.set_timeout(timeout)
         self._socket.connect(socketAddress)
 
 
@@ -285,10 +291,10 @@ class TcpLircClient(AbstractLircClient):
 
     def __init__(self, address="localhost",
                  port=DEFAULT_PORT, verbose=False, timeout=None):
-        AbstractLircClient.__init__(self, verbose, timeout)
+        AbstractLircClient.__init__(self, verbose)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_timeout(timeout)
         self._socket.connect((address, port))
-        self._socket.settimeout(timeout)
 
 
 def _new_lirc_client(command_line_args):
@@ -298,7 +304,8 @@ def _new_lirc_client(command_line_args):
     """
     try:
         return UnixDomainSocketLircClient(command_line_args.socket_pathname,
-                                          command_line_args.verbose) \
+                                          command_line_args.verbose,
+                                          command_line_args.timeout) \
             if command_line_args.address is None else \
             TcpLircClient(command_line_args.address,
                           command_line_args.port,
@@ -330,7 +337,7 @@ def parse_commandline():
         dest='port', default=DEFAULT_PORT, type=int)
     parser.add_argument(
         '-t', '--timeout',
-        help='Timeout in milliseconds', metavar='ms',
+        help='Timeout in seconds', metavar='s',
         dest='timeout', type=int, default=None)
     parser.add_argument(
         '-V', '--version',
@@ -483,6 +490,9 @@ def main():
     except BadPacketException as ex:
         print("Malformed or unexpected package received: {0}".format(ex))
         exitstatus = 4
+    except socket.timeout:
+        print("Timeout occured (was {0}s).".format(args.timeout) )
+        exitstatus = 5
 
     if lirc:
         lirc.close()
