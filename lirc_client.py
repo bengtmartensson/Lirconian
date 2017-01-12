@@ -88,7 +88,6 @@ class AbstractLircClient:
 
     def __init__(self, verbose):
         self._verbose = verbose
-        self._parser = ReplyParser()
         self._socket = None
         self._in_buffer = bytearray(0)
         self._last_command = None
@@ -126,17 +125,18 @@ class AbstractLircClient:
                   + "' to Lirc@" + self._socket.__str__())
 
         self._send_string(packet + '\n')
+        parser = ReplyParser()
 
-        while not self._parser.is_completed:
+        while not parser.is_completed:
             string = self._read_line()
             if self._verbose:
                 print('Received: "{0}"'.format(string or ''))
             if not string:
                 continue
-            self._parser.feed(string)
-        if not self._parser.success:
-            raise LircServerException(''.join(self._parser.data))
-        return self._parser.data
+            parser.feed(string)
+        if not parser.success:
+            raise LircServerException(''.join(parser.data))
+        return parser.data
 
     def send_ir_command(self, remote, command, count):
         """
