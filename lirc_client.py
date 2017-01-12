@@ -308,8 +308,8 @@ def _new_lirc_client(command_line_args):
 def parse_commandline():
     """ Parse command line args and options, returns a ArgumentParser. """
     parser = argparse.ArgumentParser(
-        prog='LircClient',
-        description="Tool to send IR codes and manipulate lircd(8)")
+        prog='lirc_client',
+        description="Program to send IR codes and commands to a Lirc server.")
     parser.add_argument(
         "-a", "--address",
         help='IP name or address of lircd host. '
@@ -341,9 +341,9 @@ def parse_commandline():
     subparsers = \
         parser.add_subparsers(dest='subcommand', metavar='sub-commands')
 
-    # Command send-once
+    # Command send
     parser_send_once = subparsers.add_parser(
-        'send-once',
+        'send',
         help='Send one command')
     parser_send_once.add_argument(
         '-#', '-c', '--count',
@@ -352,36 +352,38 @@ def parse_commandline():
     parser_send_once.add_argument('remote', help='Name of remote')
     parser_send_once.add_argument('command', help='Name of command')
 
-    # Command send-start
+    # Command start
     parser_send_start = subparsers.add_parser(
-        'send-start',
+        'start',
         help='Start sending one command until stopped')
     parser_send_start.add_argument('remote', help='Name of remote')
     parser_send_start.add_argument('command', help='Name of command')
 
-    # Command send-stop
+    # Command stop
     parser_send_stop = subparsers.add_parser(
-        'send-stop',
+        'stop',
         help='Stop sending the command from send-start')
     parser_send_stop.add_argument('remote', help='remote command')
     parser_send_stop.add_argument('command', help='remote command')
 
-    # Command list
+    # Command remotes
     parser_list = subparsers.add_parser(
-        'list',
-        help='Inquire either the list of remotes,'
-        + ' or the list of commands in a remote')
+        'remotes',
+        help='Inquire the list of remotes')
+
+    # Command commands
+    parser_list = subparsers.add_parser(
+        'commands',
+        help='Inquire the list of commands in a remote')
     parser_list.add_argument(
         "-c", "--codes",
         help='List the numerical codes in lircd.conf, not only the names',
         dest='codes', action='store_true')
-    parser_list.add_argument(
-        'remote', nargs='?',
-        help='Name of remote; empty for a list of remotes')
+    parser_list.add_argument('remote', help='Name of remote')
 
-    # Command set_input_logging
+    # Command input_log
     parser_set_input_log = subparsers.add_parser(
-        'set-input-log',
+        'input-log',
         help='Set input logging')
     parser_set_input_log.add_argument(
         'log_file', nargs='?',
@@ -389,7 +391,7 @@ def parse_commandline():
 
     # Command set_driver_options
     parser_set_driver_options = subparsers.add_parser(
-        'set-driver-option',
+        'driver-option',
         help='Set driver option')
     parser_set_driver_options.add_argument('key', help='Name of the option')
     parser_set_driver_options.add_argument('value', help='Option value')
@@ -405,7 +407,7 @@ def parse_commandline():
 
     # Command set_transmitters
     parser_set_transmitters = subparsers.add_parser(
-        'set-transmitters',
+        'transmitters',
         help='Set transmitters')
     parser_set_transmitters.add_argument(
         'transmitters', nargs='+',
@@ -423,38 +425,36 @@ def parse_commandline():
 def main():
     """Interface between the command line and the classes."""
 
-    def do_list(args):
-        """ Run the LIST [remote] socket command. """
-        if args.remote:
-            result = lirc.get_commands(args.remote, args.codes)
-        else:
-            result = lirc.get_remotes()
-        for line in result:
+    def _print_list(iterable):
+        for line in iterable:
             print(line)
 
     commands = {
-        'send-once':
-            lambda: lirc.send_ir_command(args.remote,
-                                         args.command,
+        'send':
+            lambda: lirc.send_ir_command(args.remote, args.command,
                                          args.count),
-        'send-start':
+        'start':
             lambda: lirc.send_ir_command_repeat(args.remote, args.command),
-        'send-stop':
+        'stop':
             lambda: lirc.stop_ir(args.remote, args.command),
-        'list':
-            lambda: do_list(args),
-        'set-driver-option':
+        'remotes':
+            lambda: _print_list(lirc.get_remotes()),
+        'commands':
+            lambda: _print_list(lirc.get_commands(args.remote, args.codes)),
+        'driver-option':
             lambda: lirc.set_driver_option(args.key, args.value),
         'simulate':
             lambda: lirc.simulate(args.event_string),
-        'set-transmitters':
+        'transmitters':
             lambda: lirc.set_transmitters(args.transmitters),
-        'set-input-log':
+        'input-log':
             lambda: lirc.set_input_log(args.log_file),
         'version':
             lambda: print(lirc.get_version()),
     }
+
     args = parse_commandline()
+
     if args.versionRequested:
         print(VERSION)
         sys.exit(0)
