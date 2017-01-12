@@ -127,19 +127,15 @@ class AbstractLircClient:
 
         self._send_string(packet + '\n')
 
-        result = []
-        success = True
-
         while not self._parser.is_completed:
             string = self._read_line()
-            string.strip()
             if not string:
                 continue
             if self._verbose:
                 print('Received: "{0}"'.format(string or ''))
             self._parser.feed(string)
-        if not success:
-            raise LircServerException(''.join(result))
+        if not self._parser.success:
+            raise LircServerException(''.join(self._parser.data))
         return self._parser.data
 
     def send_ir_command(self, remote, command, count):
