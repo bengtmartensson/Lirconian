@@ -32,7 +32,7 @@ There are some other subtile differences from irsend:
 * the code in list remote is suppressed, unless -c is given,
 * port number must be given with the --port (-p) argument; hostip:portnumber
   is not recognized,
-* verbose option --verbose (-v)
+* verbose option --verbose (-v); echos all communication with the Lirc server,
 * selectable timeout with --timeout (-t) option
 * better error messages
 
@@ -86,12 +86,11 @@ class AbstractLircClient:
     the abstract "socket" needs to be assigned to something sensible.
     Public properties:
          - timeout: ms, the timeout used in server communication.
-         - verbose: boolean, if True print some progress info
     """
 
     def __init__(self, verbose, timeout):
         self.timeout = timeout
-        self.verbose = verbose
+        self._verbose = verbose
         self._parser = ReplyParser()
         self._socket = None
         self._in_buffer = bytearray(0)
@@ -125,7 +124,7 @@ class AbstractLircClient:
         and receives zero or more lines in response.
         Returns a list of those lines.
         """
-        if self.verbose:
+        if self._verbose:
             print("Sending: `" + packet
                   + "' to Lirc@" + self._socket.__str__())
 
@@ -139,12 +138,9 @@ class AbstractLircClient:
             string.strip()
             if not string:
                 continue
-            if self.verbose:
+            if self._verbose:
                 print('Received: "{0}"'.format(string or ''))
             self._parser.feed(string)
-        if self.verbose:
-            print("Command " +
-                  ("succeded." if self._parser.success else "failed."))
         if not success:
             raise LircServerException(''.join(result))
         return self._parser.data
@@ -265,6 +261,10 @@ class AbstractLircClient:
         """
         self._send_command("SIMULATE " + event_string)
 
+    def set_verbose(self, verbose):
+        """Sets the verbosity of the instance."""
+        self._verbose = verbose
+
 
 class UnixDomainSocketLircClient(AbstractLircClient):
     """"
@@ -338,7 +338,7 @@ def parse_commandline():
         dest='versionRequested', action='store_true')
     parser.add_argument(
         '-v', '--verbose',
-        help='Have some commands executed verbosely',
+        help='Have the communication with the Lirc server echoed',
         dest='verbose', action='store_true')
 
     subparsers = \
