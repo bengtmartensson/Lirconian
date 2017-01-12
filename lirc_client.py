@@ -129,10 +129,10 @@ class AbstractLircClient:
 
         while not self._parser.is_completed:
             string = self._read_line()
-            if not string:
-                continue
             if self._verbose:
                 print('Received: "{0}"'.format(string or ''))
+            if not string:
+                continue
             self._parser.feed(string)
         if not self._parser.success:
             raise LircServerException(''.join(self._parser.data))
@@ -224,8 +224,7 @@ class AbstractLircClient:
         If the Lirc server gives an error,
         a LircServerException is thrown.
         """
-        s = "SET_TRANSMITTERS " + str(mask)
-        self._send_command(s)
+        self._send_command("SET_TRANSMITTERS " + str(mask))
 
     def get_version(self):
         """Returns the version string of the Lirc server."""
@@ -481,7 +480,7 @@ def main():
         print("Malformed or unexpected package received: {0}".format(ex))
         exitstatus = 4
     except socket.timeout:
-        print("Timeout occured (was {0}s).".format(args.timeout) )
+        print("Timeout occured (was {0}s).".format(args.timeout))
         exitstatus = 5
 
     if lirc:
