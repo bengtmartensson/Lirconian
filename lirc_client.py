@@ -144,11 +144,8 @@ class AbstractLircClient:
         belonging to the named remote, the stated number of times.
         (The number of repeats in the sense of lircd(8) will be one less.)
         """
-        self._last_remote = remote
-        self._last_command = command
-        return self._send_command(
-            "SEND_ONCE " + remote + " " + command + " " + str(count - 1)) \
-            is not None
+        self._send_command(
+            "SEND_ONCE " + remote + " " + command + " " + str(count - 1))
 
     def send_ir_command_repeat(self, remote, command):
         """
@@ -159,8 +156,7 @@ class AbstractLircClient:
         """
         self._last_remote = remote
         self._last_command = command
-        return self._send_command(
-            "SEND_START " + remote + " " + command) is not None
+        self._send_command("SEND_START " + remote + " " + command)
 
     def stop_ir(self, remote=None, command=None):
         """
@@ -169,11 +165,10 @@ class AbstractLircClient:
         has been previously used, the remote and command values can
         be left out, in which case the old values are used.
         """
-        return self._send_command(
+        self._send_command(
             "SEND_STOP "
             + (remote if remote else self._last_remote)
-            + " " + (command if command else self._last_command)) \
-            is not None
+            + " " + (command if command else self._last_command))
 
     def get_remotes(self):
         """
@@ -213,7 +208,7 @@ class AbstractLircClient:
         mask = 0
         for transmitter in transmitters:
             mask |= (1 << (int(transmitter) - 1))
-        return self.set_transmitters_mask(mask) is not None
+        self.set_transmitters_mask(mask)
 
     def set_transmitters_mask(self, mask):
         """
@@ -230,7 +225,7 @@ class AbstractLircClient:
         a LircServerException is thrown.
         """
         s = "SET_TRANSMITTERS " + str(mask)
-        return self._send_command(s) is not None
+        self._send_command(s)
 
     def get_version(self):
         """Returns the version string of the Lirc server."""
@@ -241,7 +236,6 @@ class AbstractLircClient:
     def set_input_log(self, path):
         """Sets the input log path to lircd. If None. inhibit logging."""
         self._send_command("SET_INPUTLOG " + path or "")
-        # FIXME: error handling
 
     def set_driver_option(self, key, value):
         """Sets a driver option to teh given value."""
