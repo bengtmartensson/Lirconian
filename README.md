@@ -1,25 +1,34 @@
 # PythonLircClient
-This is a new and independent implementation of the Lirc `irsend` program. It offers
-a Python API and a command line interface. The command line interface is almost,
-but not quite, compatible with `irsend`. Instead, it is organized as a program
-with subcommands, `send_once`, etc.
+This is a new and independent implementation of the Lirc `irsend(1)` program.
+It offers a Python API and a command line interface. The command line
+interface is almost, but not quite, compatible with irsend. Instead, it is
+organized as a program with subcommands.
 
-There are some other subtile differences from `irsend`:
+There are some other subtile differences from irsend:
 
-* subcommand must be lower case,
-* `send_once` only takes one command (`irsend` takes several),
-* `send_stop` without arguments uses the `remote` and the `command` from the last `send_start` command,
-* no need to give dummy empty arguments for `list`,
-* The `--count` argument to `send_once` is argument to the subcommand.
-* the code in `list remote` is suppressed, unless `-c` is given,
-* port number must be given with the `--port` (`-p`) argument; `hostip:portnumber` is not recognized,
-* verbose option `--verbose` (`-v`)
-* selectable timeout with `--timeout` (`-t`) option
+* subcommands have been renamed, and must be lower case,
+* send-once has been renamed to `send`; only takes one command
+  (irsend takes several),
+* send-stop (renamed to `stop`) without arguments uses the remote and
+  the command from the last send-start command
+   (API only; not from the command line),
+* list has been replaced by the two subcommands `remotes` (listing remotes),
+  and `commands`, listing the commands in a given remote,
+* no need to give dummy empty arguments for some commands,
+* The `--count` argument to send is argument to the subcommand.
+* the code in commands (previously list remote) is suppressed,
+  unless `-c` is given,
+* port number must be given with the `--port` (`-p`) argument; hostip:portnumber
+  is not recognized,
+* verbose option `--verbose` (`-v`); echos all communication with the Lirc server,
+* selectable timeout with `--timeout` (`-t`) option,
 * better error messages
 
-The subcommands `set_input_log`, `set_driver_options`, and `simulate` are presently not
-implemented. (The first two are not documented for `irsend` anyhow...).
-Help is welcome.
+It does not depend on anything but standard Python libraries.
+
+The name comes from the fact that the program requsts services from
+a Lirc server (lircd). It has nothing to do with the library
+lirc_client in Lirc.
 
 Python3 only.
 It does not depend on anything but standard Python libraries.
@@ -29,34 +38,33 @@ For a Java version, look at [JavaLircClient](https://github.com/bengtmartensson/
 
 ## Usage:
 
-    usage: LircClient [-h] [-a ADDRESS] [-d SOCKETPATHNAME] [-p PORT] [-t TIMEOUT]
-		      [-V] [-v]
-		      {send_once,send_start,send_stop,list,set_input_log,set_driver_options,simulate,set_transmitters,version}
-		      ...
+    usage: lirc_client [-h] [-a host] [-d path] [-p port] [-t s] [-V] [-v]
+		       sub-commands ...
+
+    Program to send IR codes and commands to a Lirc server.
 
     positional arguments:
-      {send_once,send_start,send_stop,list,set_input_log,set_driver_options,simulate,set_transmitters,version}
-	send_once           Send one command
-	send_start          Start sending one command until stopped
-	send_stop           Stop sending the command from send_start
-	list                Inquire either the list of remotes, or the list of
-			    commands in a remote
-	set_input_log       Set input logging
-	set_driver_options  Set driver options
+      sub-commands
+	send                Send one command
+	start               Start sending one command until stopped
+	stop                Stop sending the command from send-start
+	remotes             Inquire the list of remotes
+	commands            Inquire the list of commands in a remote
+	input-log           Set input logging
+	driver-option       Set driver option
 	simulate            Fake the reception of IR signals
-	set_transmitters    Set transmitters
-	version             Inquire version of lircd. (Use --version for the
-			    version of THIS program.)
+	transmitters        Set transmitters
+	version             Inquire version of the Lirc server. (Use "--version"
+			    for the version of this program.)
 
     optional arguments:
       -h, --help            show this help message and exit
-      -a ADDRESS, --address ADDRESS
+      -a host, --address host
 			    IP name or address of lircd host. Takes preference
 			    over --device.
-      -d SOCKETPATHNAME, --device SOCKETPATHNAME
+      -d path, --device path
 			    Path name of the lircd socket
-      -p PORT, --port PORT  Port of lircd, default 8765
-      -t TIMEOUT, --timeout TIMEOUT
-			    Timeout in milliseconds, default 5000
+      -p port, --port port  Port of lircd, default 8765
+      -t s, --timeout s     Timeout in seconds
       -V, --version         Display version information for this program
-      -v, --verbose         Have some commands executed verbosely
+      -v, --verbose         Have the communication with the Lirc server echoed

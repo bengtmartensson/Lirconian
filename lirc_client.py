@@ -23,13 +23,18 @@ organized as a program with subcommands, send-once, etc.
 
 There are some other subtile differences from irsend:
 
-* subcommand must be lower case,
-* send-once only takes one command (irsend takes several),
-* send-stop without arguments uses the remote and the command from the
-  last send-start command (API only; not from the command line),
-* no need to give dummy empty arguments for commands like list,
-* The --count argument to send-once is argument to the subcommand.
-* the code in list remote is suppressed, unless -c is given,
+* subcommands have been renamed, and must be lower case,
+* send-once has been renamed to send; only takes one command
+  (irsend takes several),
+* send-stop (renamed to stop) without arguments uses the remote and
+  the command from the last send-start command
+   (API only; not from the command line),
+* list has been replaced by the two subcommands remotes (listing remotes),
+  and commands, listing the commands in a given remote,
+* no need to give dummy empty arguments for some commands,
+* The --count argument to send is argument to the subcommand.
+* the code in commands (previously list remote) is suppressed,
+  unless -c is given,
 * port number must be given with the --port (-p) argument; hostip:portnumber
   is not recognized,
 * verbose option --verbose (-v); echos all communication with the Lirc server,
