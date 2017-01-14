@@ -60,7 +60,7 @@ import os
 
 from reply_parser import ReplyParser, BadPacketException
 
-VERSION = "LircClient 0.1.0"
+VERSION = "LircClient 0.2.0"
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
 DEFAULT_PORT = 8765
 
