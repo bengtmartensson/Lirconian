@@ -1,0 +1,3 @@
+include README.md
+include bin/lirconian
+include api_example.py

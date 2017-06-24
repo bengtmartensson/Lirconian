@@ -54,9 +54,9 @@ import sys
 import re
 import os
 
-from reply_parser import ReplyParser, BadPacketException
+from .reply_parser import ReplyParser, BadPacketException
 
-VERSION = "Lirconian 0.2.0"
+VERSION = "0.2.1"
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
 DEFAULT_PORT = 8765
 
@@ -463,7 +463,7 @@ def main():
     try:
         lirc = _new_lirconian(args)
     except ClientInstantiationError as ex:
-        print("Cannot instantiate the lirconian: {0}".format(ex))
+        print("Cannot instantiate lirconian: {0}".format(ex))
         sys.exit(2)
 
     try:

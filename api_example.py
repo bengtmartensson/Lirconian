@@ -14,7 +14,6 @@
 
 # pylint: disable=invalid-name
 
-
 """
 An somewhat silly example of using the API of Lirconian to send and
 receive information from a Lirc server.
@@ -26,7 +25,7 @@ lirc = UnixDomainSocketLirconian()
 # Uncomment if desired
 # lirc.setVerbosity(True)
 version = lirc.get_version()
-print("Version: {0}".format(version))
+print("Lircd version: {0}".format(version))
 remotes = lirc.get_remotes()
 i = 0
 for remote in remotes:
