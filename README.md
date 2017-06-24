@@ -1,4 +1,4 @@
-# PythonLircClient
+# Lirconian (previously PythonLircClient)
 This is a new and independent implementation of the Lirc `irsend(1)` program.
 It offers a Python API and a command line interface. The command line
 interface is almost, but not quite, compatible with irsend. Instead, it is
@@ -26,19 +26,15 @@ There are some other subtile differences from irsend:
 
 It does not depend on anything but standard Python libraries.
 
-The name comes from the fact that the program requsts services from
-a Lirc server (lircd). It has nothing to do with the library
-lirc_client in Lirc.
-
-Python3 only.
+Only Python3 is supported.
 It does not depend on anything but standard Python libraries.
 
-For a GUI version, look at IrScrutinizer.
+For a GUI Lirc client, look at [IrScrutinizer](https://github.com/bengtmartensson/harctoolboxbundle).
 For a Java version, look at [JavaLircClient](https://github.com/bengtmartensson/JavaLircClient)
 
 ## Usage:
 
-    usage: lirc_client [-h] [-a host] [-d path] [-p port] [-t s] [-V] [-v]
+    usage: lirconian [-h] [-a host] [-d path] [-p port] [-t s] [-V] [-v]
 		       sub-commands ...
 
     Program to send IR codes and commands to a Lirc server.

@@ -43,10 +43,6 @@ There are some other subtile differences from irsend:
 
 It does not depend on anything but standard Python libraries.
 
-The name comes from the fact that the program requsts services from
-a Lirc server (lircd). It has nothing to do with the library
-lirc_client in Lirc.
-
 For a GUI alternative, look at IrScrutinizer.
 For a Java alternative, look at JavaLircClient
 https://github.com/bengtmartensson/JavaLircClient
@@ -60,7 +56,7 @@ import os
 
 from reply_parser import ReplyParser, BadPacketException
 
-VERSION = "LircClient 0.2.0"
+VERSION = "Lirconian 0.2.0"
 DEFAULT_LIRC_DEVICE = '/var/run/lirc/lircd'
 DEFAULT_PORT = 8765
 
@@ -81,13 +77,13 @@ class ThisCannotHappenException(Exception):
 
 
 class ClientInstantiationError(Exception):
-    """Thrown if the LircClient cannot be instantiated."""
+    """Thrown if the Lirconian cannot be instantiated."""
     pass
 
 
-class AbstractLircClient:
+class AbstractLirconian:
     """
-    Abstract base class for the LircClient. To implement the class,
+    Abstract base class for the Lirconian. To implement the class,
     the abstract "socket" needs to be assigned to something sensible.
     """
 
@@ -264,47 +260,47 @@ class AbstractLircClient:
         self._socket.settimeout(timeout)
 
 
-class UnixDomainSocketLircClient(AbstractLircClient):
+class UnixDomainSocketLirconian(AbstractLirconian):
     """"
-    This class implements the LircClient with a Unix Domain Socket,
+    This class implements the Lirconian with a Unix Domain Socket,
     typically /var/run/lirc/lircd.
     """
     def __init__(self, socketAddress=DEFAULT_LIRC_DEVICE,
                  verbose=False, timeout=None):
-        AbstractLircClient.__init__(self, verbose)
+        AbstractLirconian.__init__(self, verbose)
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.set_timeout(timeout)
         self._socket.connect(socketAddress)
 
 
-class TcpLircClient(AbstractLircClient):
+class TcpLirconian(AbstractLirconian):
     """
-    This class implements the LirClient using a TCP network socket,
+    This class implements the Lirconian using a TCP network socket,
     per default on port 8765.
     """
 
     def __init__(self, address="localhost",
                  port=DEFAULT_PORT, verbose=False, timeout=None):
-        AbstractLircClient.__init__(self, verbose)
+        AbstractLirconian.__init__(self, verbose)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_timeout(timeout)
         self._socket.connect((address, port))
 
 
-def _new_lirc_client(command_line_args):
+def _new_lirconian(command_line_args):
     """
-    Factory method that returns a concrete subclass of the LircClient,
+    Factory method that returns a concrete subclass of the Lirconian,
     depending on the argument.
     """
     try:
-        return UnixDomainSocketLircClient(command_line_args.socket_pathname,
-                                          command_line_args.verbose,
-                                          command_line_args.timeout) \
+        return UnixDomainSocketLirconian(command_line_args.socket_pathname,
+                                         command_line_args.verbose,
+                                         command_line_args.timeout) \
             if command_line_args.address is None else \
-            TcpLircClient(command_line_args.address,
-                          command_line_args.port,
-                          command_line_args.verbose,
-                          command_line_args.timeout)
+            TcpLirconian(command_line_args.address,
+                         command_line_args.port,
+                         command_line_args.verbose,
+                         command_line_args.timeout)
     except Exception as ex:
         raise ClientInstantiationError(ex)
 
@@ -312,7 +308,7 @@ def _new_lirc_client(command_line_args):
 def parse_commandline():
     """ Parse command line args and options, returns a ArgumentParser. """
     parser = argparse.ArgumentParser(
-        prog='lirc_client',
+        prog='lirconian',
         description="Program to send IR codes and commands to a Lirc server.")
     parser.add_argument(
         "-a", "--address",
@@ -465,9 +461,9 @@ def main():
 
     lirc = None
     try:
-        lirc = _new_lirc_client(args)
+        lirc = _new_lirconian(args)
     except ClientInstantiationError as ex:
-        print("Cannot instantiate the client: {0}".format(ex))
+        print("Cannot instantiate the lirconian: {0}".format(ex))
         sys.exit(2)
 
     try:

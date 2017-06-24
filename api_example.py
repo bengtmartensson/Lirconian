@@ -16,13 +16,13 @@
 
 
 """
-An somewhat silly example of using the API of LircClient to send and
+An somewhat silly example of using the API of Lirconian to send and
 receive information from a Lirc server.
 """
 
-from lirc_client import UnixDomainSocketLircClient
+from lirconian import UnixDomainSocketLirconian
 
-lirc = UnixDomainSocketLircClient()
+lirc = UnixDomainSocketLirconian()
 # Uncomment if desired
 # lirc.setVerbosity(True)
 version = lirc.get_version()
