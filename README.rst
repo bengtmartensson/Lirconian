@@ -29,8 +29,11 @@ There are some other subtile differences from irsend:
 
 It does not depend on anything but standard Python libraries.
 
-Only Python3 is supported. It does not depend on anything but standard
+Both Python2 and Python3 are supported.
+It does not depend on anything but standard
 Python libraries.
+(The minimal versions are believed to be 2.7 and 3.2 respectively;
+however, this has not been tested.)
 
 For a GUI Lirc client, look at
 `IrScrutinizer <https://github.com/bengtmartensson/harctoolboxbundle>`__.

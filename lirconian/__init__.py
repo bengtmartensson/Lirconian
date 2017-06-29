@@ -48,6 +48,7 @@ For a Java alternative, look at JavaLircClient
 https://github.com/bengtmartensson/JavaLircClient
 """
 
+from __future__ import print_function
 import argparse
 import socket
 import sys
@@ -332,7 +333,7 @@ def parse_commandline():
     parser.add_argument(
         '-V', '--version',
         help='Display version information for this program',
-        dest='versionRequested', action='store_true')
+        action='version', version=VERSION)
     parser.add_argument(
         '-v', '--verbose',
         help='Have the communication with the Lirc server echoed',
@@ -454,10 +455,6 @@ def main():
     }
 
     args = parse_commandline()
-
-    if args.versionRequested:
-        print(VERSION)
-        sys.exit(0)
 
     lirc = None
     try:
