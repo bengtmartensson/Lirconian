@@ -15,9 +15,9 @@ setup(
     license = "GPLv2+",
     packages = ['lirconian'],
 #    scripts=['bin/lirconian'],
-    include_package_data = True,
     entry_points = {'console_scripts': ['lirconian=lirconian:main']},
     classifiers = [
+        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Development Status :: 4 - Beta',
         'License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)',

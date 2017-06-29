@@ -3,7 +3,7 @@ PIP=pip3.5
 PACKAGE=lirconian
 VERSION=$(shell bin/$(PACKAGE) --version)
 
-all: style
+all: sdist bdist
 
 style: pep8 pylint
 
@@ -24,10 +24,15 @@ uninstall:
 
 sdist: dist/$(PACKAGE)-$(VERSION).tar.gz
 
+bdist: dist/$(PACKAGE)-$(VERSION)-py2.py3-none-any.whl
+
 dist/$(PACKAGE)-$(VERSION).tar.gz: setup.py
 	$(PYTHON) setup.py  sdist
 
+dist/$(PACKAGE)-$(VERSION)-py2.py3-none-any.whl:
+	$(PYTHON) setup.py bdist_wheel
+
 clean:
-	rm -rf dist __pycache__ $(PACKAGE).egg-info
+	rm -rf dist build __pycache__ $(PACKAGE).egg-info
 
 .PHONY: pep8 pylint clean
