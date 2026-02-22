@@ -114,7 +114,7 @@ class AbstractLirconian:
         """Sends a string to the Lirc server."""
         self._socket.send(bytearray(cmd, 'US-ASCII'))
 
-    # This function should preferrably not be made public, although
+    # This function should preferably not be made public, although
     # it may be tempting...
     def _send_command(self, packet):
         """
@@ -455,6 +455,9 @@ def main():
     }
 
     args = parse_commandline()
+    if not(args.subcommand in commands):
+        print('Unknown or missing subcommand, use --help for syntax.')
+        sys.exit(1)
 
     lirc = None
     try:

@@ -15,31 +15,38 @@
 # pylint: disable=invalid-name
 
 """
-An somewhat silly example of using the API of Lirconian to send and
+A somewhat silly example of using the API of Lirconian to send and
 receive information from a Lirc server.
 """
 
 from lirconian import UnixDomainSocketLirconian
 
-lirc = UnixDomainSocketLirconian()
-# Uncomment if desired
-# lirc.setVerbosity(True)
-version = lirc.get_version()
-print("Lircd version: {0}".format(version))
-remotes = lirc.get_remotes()
-i = 0
-for remote in remotes:
-    print(str(i) + ":\t" + remote)
-    i = i + 1
+lirc = None
+try:
+    lirc = UnixDomainSocketLirconian()
 
-remote_no = int(input("Select a remote by entering its number: "))
-remote = remotes[remote_no]
-commands = lirc.get_commands(remote)
-i = 0
-for command in commands:
-    print(str(i) + ":\t" + command)
-    i = i + 1
+    # Uncomment if desired
+    # lirc.setVerbosity(True)
+    version = lirc.get_version()
+    print("Lircd version: {0}".format(version))
+    remotes = lirc.get_remotes()
+    i = 0
+    for remote in remotes:
+        print(str(i) + ":\t" + remote)
+        i = i + 1
 
-command_no = int(input("Select a command by entering its number: "))
-command = commands[command_no]
-lirc.send_ir_command(remote, command, 1)
+    remote_no = int(input("Select a remote by entering its number: "))
+    remote = remotes[remote_no]
+    commands = lirc.get_commands(remote)
+    i = 0
+    for command in commands:
+        print(str(i) + ":\t" + command)
+        i = i + 1
+
+    command_no = int(input("Select a command by entering its number: "))
+    command = commands[command_no]
+    lirc.send_ir_command(remote, command, 1)
+
+except FileNotFoundError:
+    print("Cannot open the Lirc socket. Is the Lircd running?")
+    exit
